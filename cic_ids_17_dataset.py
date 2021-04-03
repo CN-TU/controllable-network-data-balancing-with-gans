@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import torch
 
 from pathlib import Path
@@ -46,6 +45,8 @@ def load_and_preprocess_dataset(data_folder_path):
     df["Flow Bytes/s"] = df["Flow Bytes/s"].fillna(value=0.0)
     drop_cols = ["Flow ID", "Source IP", "Destination IP", "Protocol", "Timestamp"]
     df = df.drop(drop_cols, axis=1)
+
+    # TODO: find representation for ports
     return df
 
 
