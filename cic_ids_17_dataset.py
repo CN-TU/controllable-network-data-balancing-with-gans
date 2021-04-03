@@ -119,14 +119,12 @@ if __name__ == '__main__':
 
     train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train.pt",
                                  "./data/cic-ids-2017_splits/seed_0/y_train.pt")
-
     test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_test.pt",
                                 "./data/cic-ids-2017_splits/seed_0/y_test.pt")
 
-    print(len(train_dataset)) # 501881
-    print(len(test_dataset)) # 55765
-
-    # sanity check for stratify
+    # sanity checks
+    print(len(train_dataset))  # 501881
+    print(len(test_dataset))  # 55765
     train_label_counts = Counter(train_dataset.y)
     test_label_counts = Counter(test_dataset.y)
     print({label: round(count / len(train_dataset), 5) for label, count in train_label_counts.most_common()})
@@ -134,3 +132,8 @@ if __name__ == '__main__':
     # {3: 0.41437, 9: 0.285, 1: 0.22958, 2: 0.01846, 6: 0.01423, 10: 0.01057, 5: 0.01039, 4: 0.00986, 0: 0.00352, 11: 0.0027, 13: 0.00117, 8: 7e-05, 12: 4e-05, 7: 2e-05}
     # {3: 0.41436, 9: 0.285, 1: 0.22959, 2: 0.01845, 6: 0.01424, 10: 0.01058, 5: 0.0104, 4: 0.00986, 0: 0.00353, 11: 0.00271, 13: 0.00117, 8: 5e-05, 12: 4e-05, 7: 2e-05}
 
+    train_loader = data.DataLoader(train_dataset, batch_size=128)
+    test_loader = data.DataLoader(test_dataset, batch_size=128)
+    batch = next(iter(train_loader))
+    print(batch[0].shape, batch[1].shape)
+    print(batch)
