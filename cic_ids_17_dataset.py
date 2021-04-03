@@ -72,7 +72,7 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
     if not write_path.exists():
         write_path.mkdir(parents=True, exist_ok=True)
 
-    print("Loding and preprocessing data...")
+    print("Loading and preprocessing data...")
     df = load_and_preprocess_dataset(data_folder_path)
 
     # encode target col
@@ -88,14 +88,15 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
         X, y,
         test_size=test_size,
         stratify=y if stratify else None,
-        random_state=seed)
+        random_state=seed
+    )
 
     print(f"Saving split to {write_path}...")
     torch.save(X_train, write_path / "X_train.pt")
     torch.save(y_train, write_path / "y_train.pt")
     torch.save(X_test, write_path / "X_test.pt")
     torch.save(y_test, write_path / "y_test.pt")
-    np.save(write_path / "classes.npy", label_encoder.classes_)
+    torch.save(label_encoder.classes_, write_path / "classes.pt")
 
 
 class CIC17Dataset(data.Dataset):
@@ -120,14 +121,16 @@ if __name__ == '__main__':
                                  "./data/cic-ids-2017_splits/seed_0/y_train.pt")
 
     test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_test.pt",
-                                 "./data/cic-ids-2017_splits/seed_0/y_test.pt")
+                                "./data/cic-ids-2017_splits/seed_0/y_test.pt")
 
-    print(len(train_dataset))
-    print(len(test_dataset))
+    print(len(train_dataset)) # 501881
+    print(len(test_dataset)) # 55765
 
     # sanity check for stratify
     train_label_counts = Counter(train_dataset.y)
     test_label_counts = Counter(test_dataset.y)
     print({label: round(count / len(train_dataset), 5) for label, count in train_label_counts.most_common()})
     print({label: round(count / len(test_dataset), 5) for label, count in test_label_counts.most_common()})
+    # {3: 0.41437, 9: 0.285, 1: 0.22958, 2: 0.01846, 6: 0.01423, 10: 0.01057, 5: 0.01039, 4: 0.00986, 0: 0.00352, 11: 0.0027, 13: 0.00117, 8: 7e-05, 12: 4e-05, 7: 2e-05}
+    # {3: 0.41436, 9: 0.285, 1: 0.22959, 2: 0.01845, 6: 0.01424, 10: 0.01058, 5: 0.0104, 4: 0.00986, 0: 0.00353, 11: 0.00271, 13: 0.00117, 8: 5e-05, 12: 4e-05, 7: 2e-05}
 
