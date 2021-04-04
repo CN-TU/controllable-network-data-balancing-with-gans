@@ -86,8 +86,8 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
     df = df[np.isfinite(df).all(1)]
     X = df.drop("Label", axis=1).values
     y = df.Label.values
-    # scaler = MinMaxScaler()
-    # X = scaler.fit_transform(X)
+    scaler = MinMaxScaler()
+    X = scaler.fit_transform(X)
 
     # split train_test
     print("Generating split...")
@@ -105,7 +105,7 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
     torch.save(y_test, write_path / "y_test.pt")
     # save labels and scaler to inverse-transform data
     torch.save(label_encoder.classes_, write_path / "classes.pt")
-    # joblib.dump(scaler, write_path / 'min_max_scaler.gz')
+    joblib.dump(scaler, write_path / 'min_max_scaler.gz')
     joblib.dump(label_encoder, write_path / 'label_encoder.gz')
 
 
