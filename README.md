@@ -17,5 +17,4 @@ TBD
 ├── cgan.py                   # Contains the conditional GAN implementation classes. 
 ├── cic_ids_17_dataset.py     # Contains the data preprocessing pipeline for PyTorch dataset. 
 └── train_cgan.py             # Script for training conditional GAN. 
-
 ```
