@@ -104,10 +104,11 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
     )
 
     print(f"Saving split to {write_path}...")
-    torch.save(X_train, write_path / "X_train.pt")
-    torch.save(y_train, write_path / "y_train.pt")
-    torch.save(X_test, write_path / "X_test.pt")
-    torch.save(y_test, write_path / "y_test.pt")
+    suffix = "_scaled" if scale else ""
+    torch.save(X_train, write_path / f"X_train{suffix}.pt")
+    torch.save(y_train, write_path / f"y_train{suffix}.pt")
+    torch.save(X_test, write_path / f"X_test{suffix}.pt")
+    torch.save(y_test, write_path / f"y_test{suffix}.pt")
     # save labels and scaler to inverse-transform data
     torch.save(label_encoder.classes_, write_path / "classes.pt")
     joblib.dump(label_encoder, write_path / 'label_encoder.gz')
@@ -129,12 +130,13 @@ class CIC17Dataset(data.Dataset):
 if __name__ == '__main__':
     from collections import Counter
 
-    generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=True)
+    # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=False)
+    # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=True)
 
-    train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train.pt",
-                                 "./data/cic-ids-2017_splits/seed_0/y_train.pt")
-    test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_test.pt",
-                                "./data/cic-ids-2017_splits/seed_0/y_test.pt")
+    train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train_scaled.pt",
+                                 "./data/cic-ids-2017_splits/seed_0/y_train_scaled.pt")
+    test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_test_scaled.pt",
+                                "./data/cic-ids-2017_splits/seed_0/y_test_scaled.pt")
 
     # sanity checks
     print(len(train_dataset))  # 529729
@@ -153,6 +155,21 @@ if __name__ == '__main__':
     test_loader = data.DataLoader(test_dataset, batch_size=128)
     batch = next(iter(train_loader))
     print(batch[0].shape, batch[1].shape)
-    print(batch)
 
-    # inverse transform batch (scale and labels)
+    # inverse transform labels
+    classes = torch.load("./data/cic-ids-2017_splits/seed_0/classes.pt")
+    label_encoder = joblib.load("./data/cic-ids-2017_splits/seed_0/label_encoder.gz")
+    print("\nClasses: ", classes)
+    print("Transformed labels: ", *zip(train_dataset.y[:10],
+                                       label_encoder.inverse_transform(train_dataset.y[:10])))
+
+    # inverse transform scaling
+    scaler = joblib.load("./data/cic-ids-2017_splits/seed_0/min_max_scaler.gz")
+    train_dataset_unscaled = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train.pt",
+                                          "./data/cic-ids-2017_splits/seed_0/y_train.pt")
+    X_unscaled = scaler.inverse_transform(train_dataset.X)
+    print("\nInverse scaled X: ", X_unscaled[0][:10])
+    print("Original unscaled X: ", train_dataset_unscaled.X[0][:10])
+    print("Equal: ", np.array_equal(X_unscaled, train_dataset_unscaled.X))
+    # tiny numeric differences are expected
+    print("All close: ", np.allclose(X_unscaled, train_dataset_unscaled.X))
