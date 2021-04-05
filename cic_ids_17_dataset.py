@@ -54,12 +54,13 @@ def load_and_preprocess_dataset(data_folder_path):
 
 
 def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_splits",
-                              test_size=0.01, seed=0, stratify=False):
+                              test_size=0.01, seed=0, stratify=False, scale=False):
     """
     Generate a train-test-split of the CIC-IDS dataset:
         - loads and preprocess dataset
         - encodes the `Label` col
         - removes rows with `inf` values in `Flow Bytes/s` and `Flow Packets/s`
+        - scales the numeric columns in the dataframe using MinMaxScaler
         - split df into train and test set given `test_size` and `seed`.
         - saves the generate split + class array to `write_path`
 
@@ -67,8 +68,10 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
         data_folder_path: String. Folder path where .csv files reside.
         write_path: String. Folder path to save files to.
         test_size: Float. Proportion of test samples
-        stratify: Bool. Whether to preserve the original distribution of labels in train/test.
         seed: Int. For reproducibility.
+        stratify: Bool. Whether to preserve the original distribution of labels in train/test.
+        scale: Boole. Whether to scale numeric columns.
+
 
     """
     write_path = Path(write_path) / f"seed_{seed}"
@@ -86,8 +89,10 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
     df = df[np.isfinite(df).all(1)]
     X = df.drop("Label", axis=1).values
     y = df.Label.values
-    scaler = MinMaxScaler()
-    X = scaler.fit_transform(X)
+    if scale:
+        scaler = MinMaxScaler()
+        X = scaler.fit_transform(X)
+        joblib.dump(scaler, write_path / 'min_max_scaler.gz')
 
     # split train_test
     print("Generating split...")
@@ -105,7 +110,6 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
     torch.save(y_test, write_path / "y_test.pt")
     # save labels and scaler to inverse-transform data
     torch.save(label_encoder.classes_, write_path / "classes.pt")
-    joblib.dump(scaler, write_path / 'min_max_scaler.gz')
     joblib.dump(label_encoder, write_path / 'label_encoder.gz')
 
 
@@ -125,7 +129,7 @@ class CIC17Dataset(data.Dataset):
 if __name__ == '__main__':
     from collections import Counter
 
-    generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True)
+    generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=True)
 
     train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train.pt",
                                  "./data/cic-ids-2017_splits/seed_0/y_train.pt")
@@ -152,7 +156,3 @@ if __name__ == '__main__':
     print(batch)
 
     # inverse transform batch (scale and labels)
-
-
-
-
