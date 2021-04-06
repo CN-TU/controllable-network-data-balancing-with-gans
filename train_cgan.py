@@ -1,14 +1,17 @@
 """
-Train loop + logging
-    - best way to evaluate?
-    - can implement some evaluation script, that checks how far
-        away the generated features are from ground truth
-    - not clear to me how feed the flows into SNORT.
-
 TODO:
-    - class distribution in batches:
+    1. class distribution in batches:
         - currently not proportional to the actual class distribution
         - problematic since highly skewed distribution
+    2. evaluation, how do we assess quality of the generated flows?
+        - not yet clear how feed the flows into SNORT.
+        - compute mean/std for each feature by class
+          generate n-samples for each class, compute mean/std
+          compare generated distributions against actual distributions
+        - also could plot feature distributions for real/fake flows right in TensorBoard (e.g., every nth step)
+          similar to: https://www.youtube.com/watch?v=ZFmnchOJseM
+          matplotlib plots can be added to TB as images: https://stackoverflow.com/questions/38543850/how-to-display-custom-images-in-tensorboard-e-g-matplotlib-plots
+
 """
 import argparse
 import torch
@@ -39,10 +42,10 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu")
 
     print("Loading dataset...")
-    train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train.pt",
-                                 "./data/cic-ids-2017_splits/seed_0/y_train.pt")
-    test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_test.pt",
-                                "./data/cic-ids-2017_splits/seed_0/y_test.pt")
+    train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train_scaled.pt",
+                                 "./data/cic-ids-2017_splits/seed_0/y_train_scaled.pt")
+    test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_test_scaled.pt",
+                                "./data/cic-ids-2017_splits/seed_0/y_test_scaled.pt")
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size)
     test_loader = data.DataLoader(test_dataset, batch_size=args.batch_size)
 

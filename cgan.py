@@ -171,4 +171,9 @@ class Experiment:
         }, self.model_save_dir / f"model-{epoch}.pt")
 
     def evaluate(self):
+        """
+        Compares generated feature distributions with actual distributions.
+        Plots will be written to TensorBoard.
+
+        """
         pass

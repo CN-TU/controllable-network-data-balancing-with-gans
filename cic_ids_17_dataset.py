@@ -1,3 +1,13 @@
+"""
+TODO:
+    1. what columns to keep?
+        - actually, it is not useful to keep cols like "Fwd/Bwd Packet Length Mean/Std"
+          since we have "Total Fwd/Bwd Packets" and "Total Length of Fwd/Bwd Packets".
+          so, we can derive them anyway. GAN might not get them accurately
+    2. how to preprocess "categorical" columns (e.g., Port numbers)
+
+"""
+
 import pandas as pd
 import torch
 import joblib
@@ -110,8 +120,9 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
     torch.save(X_test, write_path / f"X_test{suffix}.pt")
     torch.save(y_test, write_path / f"y_test{suffix}.pt")
     # save labels and scaler to inverse-transform data
-    torch.save(label_encoder.classes_, write_path / "classes.pt")
     joblib.dump(label_encoder, write_path / 'label_encoder.gz')
+    torch.save(label_encoder.classes_, write_path / "class_names.pt")
+    torch.save(df.columns, write_path / "column_names.pt")
 
 
 class CIC17Dataset(data.Dataset):
@@ -157,9 +168,9 @@ if __name__ == '__main__':
     print(batch[0].shape, batch[1].shape)
 
     # inverse transform labels
-    classes = torch.load("./data/cic-ids-2017_splits/seed_0/classes.pt")
+    class_names = torch.load("./data/cic-ids-2017_splits/seed_0/class_names.pt")
     label_encoder = joblib.load("./data/cic-ids-2017_splits/seed_0/label_encoder.gz")
-    print("\nClasses: ", classes)
+    print("\nClasses: ", class_names)
     print("Transformed labels: ", *zip(train_dataset.y[:10],
                                        label_encoder.inverse_transform(train_dataset.y[:10])))
 
