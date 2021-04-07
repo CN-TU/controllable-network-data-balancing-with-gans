@@ -91,7 +91,7 @@ class Experiment:
             Path(self.log_dir).mkdir(parents=True, exist_ok=True)
             self.summary_writer = SummaryWriter(self.log_dir)
             print("Writing logs to: ", self.log_dir)
-            # # dummy inputs to save graph (cannot save BOTH generator and discriminator unfortunately )
+            # # dummy inputs to save graph (cannot save BOTH generator and discriminator unfortunately)
             # noise = torch.zeros((1, self.G.latent_dim))
             # labels = torch.zeros(1, dtype=torch.long)
             # features = torch.zeros((1, self.D.num_features))
@@ -103,10 +103,13 @@ class Experiment:
         running_stats = {"G_loss": 0, "D_loss": 0, "D_loss_fake": 0, "D_loss_real": 0}
         with tqdm(total=total_steps, desc="Train loop") as pbar:
             for step, (features, labels) in enumerate(train_loader):
+                features = features.to(self.device)
+                labels = labels.to(self.device)
+
                 # ground truths
                 batch_size = features.shape[0]
-                real = torch.FloatTensor(batch_size, 1).fill_(1.0)
-                fake = torch.FloatTensor(batch_size, 1).fill_(0.0)
+                real = torch.FloatTensor(batch_size, 1).fill_(1.0).to(self.device)
+                fake = torch.FloatTensor(batch_size, 1).fill_(0.0).to(self.device)
 
                 # train generator
                 generated_features, noise_labels, G_stats = self.fit_generator(real, batch_size)
@@ -127,13 +130,13 @@ class Experiment:
 
         # logs after epoch
         if self.log_dir:
-            stats_epoch = {k + "_epoch": v / total_steps for k, v in running_stats.items()}
+            stats_epoch = {"epoch_" + k: v / total_steps for k, v in running_stats.items()}
             self.log_to_tensorboard(stats_epoch, epoch, 0, 1)
 
     def fit_generator(self, real, batch_size):
         self.G_optimizer.zero_grad()
-        noise = torch.FloatTensor(np.random.normal(0, 1, (batch_size, self.latent_dim)))
-        noise_labels = torch.LongTensor(np.random.randint(0, self.num_labels, batch_size))
+        noise = torch.FloatTensor(np.random.normal(0, 1, (batch_size, self.latent_dim))).to(self.device)
+        noise_labels = torch.LongTensor(np.random.randint(0, self.num_labels, batch_size)).to(self.device)
         generated_features = self.G(noise, noise_labels)
         validity = self.D(generated_features, noise_labels)
         G_loss = self.criterion(validity, real)

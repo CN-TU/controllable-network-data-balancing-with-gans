@@ -64,7 +64,7 @@ def load_and_preprocess_dataset(data_folder_path):
 
 
 def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_splits",
-                              test_size=0.01, seed=0, stratify=False, scale=False):
+                              test_size=0.05, seed=0, stratify=False, scale=False):
     """
     Generate a train-test-split of the CIC-IDS dataset:
         - loads and preprocess dataset
@@ -150,16 +150,16 @@ if __name__ == '__main__':
                                 "./data/cic-ids-2017_splits/seed_0/y_test_scaled.pt")
 
     # sanity checks
-    print(len(train_dataset))  # 529729
-    print(len(test_dataset))  # 27881
+    print(len(train_dataset))  # 528728
+    print(len(test_dataset))  # 27828
     train_label_counts = Counter(train_dataset.y)
     test_label_counts = Counter(test_dataset.y)
     print({label: round(count / len(train_dataset), 5) for label, count in train_label_counts.most_common()})
     print({label: round(count / len(test_dataset), 5) for label, count in test_label_counts.most_common()})
-    # {3: 0.41437, 9: 0.285, 1: 0.22959, 2: 0.01846, 6: 0.01424, 10: 0.01057, 5: 0.01039,
-    #  4: 0.00986, 0: 0.00352, 11: 0.0027, 13: 0.00117, 8: 7e-05, 12: 4e-05, 7: 2e-05}
-    # {3: 0.41438, 9: 0.2851, 1: 0.22951, 2: 0.01847, 6: 0.01417, 10: 0.01058, 5: 0.0104,
-    #  4: 0.00986, 0: 0.00359, 11: 0.00269, 13: 0.00126}
+    # {3: 0.41348, 9: 0.28533, 1: 0.23003, 2: 0.01849, 6: 0.01426, 10: 0.0106, 5: 0.01041, 4: 0.00988, 0: 0.00351,
+    #  11: 0.00271, 13: 0.00117, 8: 6e-05, 12: 4e-05, 7: 2e-05}
+    # {3: 0.41347, 9: 0.28532, 1: 0.23002, 2: 0.01851, 6: 0.01427, 10: 0.0106, 5: 0.01042, 4: 0.00988, 0: 0.00352,
+    #  11: 0.0027, 13: 0.00119, 8: 7e-05, 12: 4e-05}
 
     # PyTorch data loaders check
     train_loader = data.DataLoader(train_dataset, batch_size=128)
