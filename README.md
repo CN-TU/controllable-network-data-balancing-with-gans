@@ -17,6 +17,7 @@ TBD
 ├── tensorboard               # Directory for TensorBoard logs. Contains subfolders of structure MODEL_NAME/TIME/logs.
 ├── data_exploration.ipynb    # Jupyter notebook for data exploration steps.
 ├── cgan.py                   # Contains the conditional GAN implementation classes. 
-├── cic_ids_17_dataset.py     # Contains the data preprocessing pipeline for PyTorch dataset. 
+├── cic_ids_17_dataset.py     # Contains the data preprocessing pipeline for PyTorch dataset.
+├── experiment.py             # Contains the main experiment class for GAN training. 
 └── train_cgan.py             # Script for training conditional GAN. 
 ```
