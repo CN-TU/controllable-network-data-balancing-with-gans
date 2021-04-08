@@ -17,7 +17,8 @@ import argparse
 import torch
 from torch.utils import data
 
-from cgan import Generator, Discriminator, Experiment
+from experiment import Experiment
+from cgan import Generator, Discriminator
 from cic_ids_17_dataset import CIC17Dataset
 
 
@@ -29,10 +30,11 @@ if __name__ == '__main__':
     parser.add_argument("--latent_dim", type=int, default=100)
     parser.add_argument("--num_features", type=int, default=79)
     parser.add_argument("--num_labels", type=int, default=14)
-    parser.add_argument("--lr", type=float, default=0.0002)
+    parser.add_argument("--lr", type=float, default=0.0001)
     parser.add_argument("--log_freq", type=int, default=100, help="Write logs to commandline every n steps.")
     parser.add_argument("--log_tensorboard_freq", type=int, default=100,
                         help="Write logs to tensorboard every n steps.")
+    parser.add_argument("--eval_freq", type=int, default=1, help="Evaluate model every n epochs.")
     parser.add_argument("--save_freq", type=int, default=1, help="Save model every n epochs.")
     parser.add_argument("--log_dir", type=str, default="./tensorboard/cgan", help="Tensorboard log dir.")
     parser.add_argument("--model_save_dir", type=str, default="./models/cgan")
@@ -48,6 +50,10 @@ if __name__ == '__main__':
                                 "./data/cic-ids-2017_splits/seed_0/y_test_scaled.pt")
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size)
     test_loader = data.DataLoader(test_dataset, batch_size=args.batch_size)
+    column_names = torch.load("./data/cic-ids-2017_splits/seed_0/column_names.pt")
+    cols_to_plot = ["Source Port", "Destination Port", "Flow Duration", "Flow Packets/s", "Fwd Packets/s",
+                    "Bwd Packets/s", "Packet Length Mean", "Average Packet Size", "Idle Mean"]
+    col_to_idx = {col: i for i, col in enumerate(column_names)}
 
     print("Making GAN...")
     G = Generator(args.num_features, args.num_labels, latent_dim=args.latent_dim).to(device)
@@ -62,6 +68,11 @@ if __name__ == '__main__':
 
     print("Starting train loop...")
     for epoch in range(args.n_epochs):
+
+        if epoch % args.eval_freq == 0:
+            exp.evaluate(test_dataset, col_to_idx, cols_to_plot, epoch)
+
         exp.train_epoch(train_loader, epoch, log_freq=args.log_freq, log_tensorboard_freq=args.log_tensorboard_freq)
+
         if epoch % args.save_freq == 0:
             exp.save_model(epoch)
