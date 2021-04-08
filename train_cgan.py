@@ -30,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument("--latent_dim", type=int, default=100)
     parser.add_argument("--num_features", type=int, default=79)
     parser.add_argument("--num_labels", type=int, default=14)
-    parser.add_argument("--lr", type=float, default=0.0001)
+    parser.add_argument("--lr", type=float, default=0.0002)
     parser.add_argument("--log_freq", type=int, default=100, help="Write logs to commandline every n steps.")
     parser.add_argument("--log_tensorboard_freq", type=int, default=100,
                         help="Write logs to tensorboard every n steps.")
@@ -60,7 +60,9 @@ if __name__ == '__main__':
     D = Discriminator(args.num_features, args.num_labels).to(device)
     G_optimizer = torch.optim.Adam(G.parameters(), lr=args.lr)
     D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr)
-    criterion = torch.nn.MSELoss()
+    # criterion = torch.nn.MSELoss()
+    criterion = torch.nn.BCEWithLogitsLoss()
+
     exp = Experiment(G, D, G_optimizer, D_optimizer, criterion,
                      model_save_dir=args.model_save_dir, log_dir=args.log_dir)
     print("Generator:\n", G)
