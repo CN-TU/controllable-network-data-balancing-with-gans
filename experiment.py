@@ -54,7 +54,7 @@ class Experiment:
             # self.summary_writer.add_graph(self.G, [noise, labels])
             # self.summary_writer.add_graph(self.D, [features, labels])
 
-    def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1):
+    def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, label_weights=None):
         """
         Runs a single training epoch.
 
@@ -63,6 +63,7 @@ class Experiment:
             epoch: Int. Current epoch, important for TensorBoard logging.
             log_freq: Int. Determines the logging frequency for commandline outputs.
             log_tensorboard_freq: Int. Determines the logging frequency of TensorBoard logs.
+            label_weights: None or List. Weights used for random generation of fake labels.
 
         """
         total_steps = len(train_loader)
@@ -78,7 +79,8 @@ class Experiment:
                 fake = torch.FloatTensor(batch_size, 1).fill_(0.0).to(self.device)
 
                 # train generator
-                generated_features, noise_labels, G_stats = self.fit_generator(real, batch_size)
+                generated_features, noise_labels, G_stats = self.fit_generator(real, batch_size,
+                                                                               label_weights=label_weights)
 
                 # train discriminator
                 D_stats = self.fit_discriminator(features, labels, generated_features,
@@ -99,10 +101,11 @@ class Experiment:
             stats_epoch = {"epoch_" + k: v / total_steps for k, v in running_stats.items()}
             self.log_to_tensorboard(stats_epoch, epoch, 0, 1)
 
-    def fit_generator(self, real, batch_size):
+    def fit_generator(self, real, batch_size, label_weights=None):
         self.G_optimizer.zero_grad()
         noise = torch.FloatTensor(np.random.normal(0, 1, (batch_size, self.latent_dim))).to(self.device)
-        noise_labels = torch.LongTensor(np.random.randint(0, self.num_labels, batch_size)).to(self.device)
+        noise_labels = torch.LongTensor(np.random.choice(np.arange(0, self.num_labels),
+                                                         batch_size, p=label_weights)).to(self.device)
         generated_features = self.G(noise, noise_labels)
         validity = self.D(generated_features, noise_labels)
         G_loss = self.criterion(validity, real)
@@ -139,7 +142,7 @@ class Experiment:
             'optim_D_state_dict': self.D_optimizer.state_dict(),
         }, self.model_save_dir / f"model-{epoch}.pt")
 
-    def evaluate(self, test_loader, col_to_idx, cols_to_plot, step, num_samples=500):
+    def evaluate(self, test_loader, col_to_idx, cols_to_plot, step, num_samples=1024, label_weights=None):
         """
         Compares generated feature distributions with actual distributions of the given test set.
         Plots are written to TensorBoard
@@ -151,11 +154,13 @@ class Experiment:
             cols_to_plot: List. Names of feature columns to plot.
             step: Int. Current step/epoch.
             num_samples: Int. Number of fake samples to generate.
+            label_weights: None or List. Weights used for random generation of fake labels.
 
         """
         with torch.no_grad():
             noise = torch.FloatTensor(np.random.normal(0, 1, (num_samples, self.latent_dim))).to(self.device)
-            noise_labels = torch.LongTensor(np.random.randint(0, self.num_labels, num_samples)).to(self.device)
+            noise_labels = torch.LongTensor(np.random.choice(np.arange(0, self.num_labels),
+                                                             num_samples, p=label_weights)).to(self.device)
             generated_features = self.G(noise, noise_labels)
 
             for col in cols_to_plot:

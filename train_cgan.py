@@ -54,6 +54,9 @@ if __name__ == '__main__':
     cols_to_plot = ["Source Port", "Destination Port", "Flow Duration", "Flow Packets/s", "Fwd Packets/s",
                     "Bwd Packets/s", "Packet Length Mean", "Average Packet Size", "Idle Mean"]
     col_to_idx = {col: i for i, col in enumerate(column_names)}
+    label_distribution = {0: 0.01, 1: 0.23, 2: 0.02, 3: 0.38, 4: 0.01, 5: 0.01, 6: 0.015,
+                          7: 0.01, 8: 0.01, 9: 0.265, 10: 0.01, 11: 0.01, 12: 0.01, 13: 0.01}
+    label_weights = list(label_distribution.values())
 
     print("Making GAN...")
     G = Generator(args.num_features, args.num_labels, latent_dim=args.latent_dim).to(device)
@@ -72,9 +75,12 @@ if __name__ == '__main__':
     for epoch in range(args.n_epochs):
 
         if epoch % args.eval_freq == 0:
-            exp.evaluate(test_dataset, col_to_idx, cols_to_plot, epoch)
+            exp.evaluate(test_dataset, col_to_idx, cols_to_plot,
+                         epoch, label_weights=label_weights)
 
-        exp.train_epoch(train_loader, epoch, log_freq=args.log_freq, log_tensorboard_freq=args.log_tensorboard_freq)
+        exp.train_epoch(train_loader, epoch, log_freq=args.log_freq,
+                        log_tensorboard_freq=args.log_tensorboard_freq,
+                        label_weights=label_weights)
 
         if epoch % args.save_freq == 0:
             exp.save_model(epoch)
