@@ -34,9 +34,10 @@ if __name__ == '__main__':
     parser.add_argument("--log_freq", type=int, default=100, help="Write logs to commandline every n steps.")
     parser.add_argument("--log_tensorboard_freq", type=int,
                         default=100, help="Write logs to TensorBoard every n steps.")
-    parser.add_argument("--use_wgan", action="store_true", help="Indicates if the WGAN architecture should be used.")
     parser.add_argument("--eval_freq", type=int, default=1, help="Evaluate model every n epochs.")
     parser.add_argument("--save_freq", type=int, default=1, help="Save model every n epochs.")
+    parser.add_argument("--use_wgan", action="store_true", help="Indicates if the WGAN architecture should be used.")
+    parser.add_argument("--use_gp", action="store_true", help="Indicates if gradient should be used in WGAN.")
     parser.add_argument("--log_dir", type=str, default="./tensorboard", help="TensorBoard log dir.")
     parser.add_argument("--model_save_dir", type=str, default="./models")
     args = parser.parse_args()
@@ -69,7 +70,7 @@ if __name__ == '__main__':
 
     if args.use_wgan:
         exp = CWGANExperiment(G, D, G_optimizer, D_optimizer, criterion=None,
-                              model_save_dir=model_save_dir, log_dir=log_dir)
+                              use_gradient_penalty=args.use_gp, model_save_dir=model_save_dir, log_dir=log_dir)
     else:
         # criterion = torch.nn.MSELoss()
         criterion = torch.nn.BCEWithLogitsLoss()

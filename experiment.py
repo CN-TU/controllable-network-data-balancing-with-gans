@@ -1,7 +1,7 @@
 """
-Incorporate the WGAN-GP loss:
-- https://github.com/eriklindernoren/PyTorch-GAN/blob/master/implementations/wgan/wgan.py
-- https://github.com/eriklindernoren/PyTorch-GAN/blob/master/implementations/wgan_gp/wgan_gp.py
+GAN implementations adjusted from
+- https://github.com/eriklindernoren/PyTorch-GAN
+
 """
 import io
 import torch
@@ -230,7 +230,8 @@ class CGANExperiment(BaseExperiment):
 
 class CWGANExperiment(BaseExperiment):
 
-    def __init__(self, G, D, G_optimizer, D_optimizer, criterion=None, model_save_dir=None, log_dir=None, device=None):
+    def __init__(self, G, D, G_optimizer, D_optimizer, use_gradient_penalty=False,
+                 criterion=None, model_save_dir=None, log_dir=None, device=None):
         """
         Implement the conditional Wasserstein-GAN architecture.
 
@@ -245,6 +246,8 @@ class CWGANExperiment(BaseExperiment):
             device: torch.device. Either cpu or gpu device.
         """
         super().__init__(G, D, G_optimizer, D_optimizer, criterion, model_save_dir, log_dir, device)
+        self.use_gradient_penalty = use_gradient_penalty
+        self.lambda_gp = 10
 
     def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1,
                     G_train_freq=5, label_weights=None):
@@ -305,12 +308,35 @@ class CWGANExperiment(BaseExperiment):
 
     def fit_discriminator(self, features, labels, generated_features, noise_labels):
         self.D_optimizer.zero_grad()
-        D_loss_real = -torch.mean(self.D(features.float(), labels))
-        D_loss_fake = torch.mean(self.D(generated_features.detach(), noise_labels))
-        D_loss = D_loss_real + D_loss_fake
+        validity_real = self.D(features.float(), labels)
+        validity_fake = self.D(generated_features.detach(), noise_labels)
+        D_loss_real = -torch.mean(validity_real)
+        D_loss_fake = torch.mean(validity_fake)
+        if self.use_gradient_penalty:
+            gradient_penalty = self.compute_gradient_penalty(features.data, labels, generated_features.data)
+            D_loss = D_loss_real + D_loss_fake + self.lambda_gp * gradient_penalty
+        else:
+            D_loss = D_loss_real + D_loss_fake
         D_loss.backward()
         self.D_optimizer.step()
         # clip weights
         for p in self.D.parameters():
             p.data.clamp_(-0.01, 0.01)
         return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item()}
+
+    def compute_gradient_penalty(self, features, labels, generated_features):
+        alpha = torch.FloatTensor(np.random.random((features.size(0), 1))).to(self.device)
+        interpolates = (alpha * features.float() + ((1 - alpha) * generated_features)).requires_grad_(True)
+        d_interpolates = self.D(interpolates, labels)
+        fake = torch.FloatTensor(features.shape[0], 1).fill_(1.0).to(self.device)
+        gradients = torch.autograd.grad(
+            outputs=d_interpolates,
+            inputs=interpolates,
+            grad_outputs=fake,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True,
+        )[0]
+        gradients = gradients.view(gradients.size(0), -1)
+        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+        return gradient_penalty.to(self.device)
