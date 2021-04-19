@@ -1,16 +1,20 @@
 """
-TODO:
+Notes:
     1. class distribution in batches:
-        - currently not proportional to the actual class distribution
-        - problematic since highly skewed distribution
-    2. evaluation, how do we assess quality of the generated flows?
-        - not yet clear how feed the flows into SNORT.
-        - compute mean/std for each feature by class
-          generate n-samples for each class, compute mean/std
-          compare generated distributions against actual distributions
-        - also could plot feature distributions for real/fake flows right in TensorBoard (e.g., every nth step)
-          similar to: https://www.youtube.com/watch?v=ZFmnchOJseM
-          matplotlib plots can be added to TB as images: https://stackoverflow.com/questions/38543850/how-to-display-custom-images-in-tensorboard-e-g-matplotlib-plots
+        - now proportional to the actual class distribution
+    2. Evaluation, how do we assess quality of the generated flows?
+        - we cannot feed flows into SNORT --> therefore we use external ML model to classify
+        - visual inspection of feature distributions in TensorBoard, similar to: https://www.youtube.com/watch?v=ZFmnchOJseM
+
+TODO:
+    2. Evaluation, how do we assess quality of the generated flows?
+        - implement ML model (e.g., SVM, Random forest) for evaluation
+            - classify only True/False or rather class-based?
+            - since, we are generating flows conditioned on the class, class-based would be better
+        - class distributions
+            - compute mean/std for each feature by class in train
+            - generate n-samples for each class & compute mean/std
+            - compare generated distributions against actual distributions, based on distance (e.g., Euclidean)
 
 """
 import argparse

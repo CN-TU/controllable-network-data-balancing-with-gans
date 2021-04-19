@@ -29,6 +29,8 @@ tensorboard --logdir=./tensorboard
 ├── cic_ids_17_dataset.py     # Contains the data preprocessing pipeline for PyTorch dataset.
 ├── experiment.py             # Contains the main experiment class for GAN training. 
 ├── train_cgan.py             # Script for training conditional GAN.
+├── train_classifier.py       # Script to train & save a classifier (Random forest) for evaluation of generated flows. 
 ├── data_exploration.ipynb    # Jupyter notebook for data exploration steps.
-└── train_cgan_colab.ipynb    # Jupyter notebook training cGAN on GPU provided by Google Colab. 
+├── train_cgan_colab.ipynb    # Jupyter notebook for training cGAN on GPU provided by Google Colab. 
+└── train_classifier.ipynb    # Jupyter notebook for training the classifier used for evaluation of generated flows.  
 ```

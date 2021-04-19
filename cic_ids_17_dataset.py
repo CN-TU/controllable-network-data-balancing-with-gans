@@ -19,18 +19,18 @@ from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from sklearn.model_selection import train_test_split
 
 
-def load_and_preprocess_dataset(data_folder_path):
+def load_and_preprocess_dataset(data_folder_path, keep_benign=False):
     """
     Loads and preprocesses the CIC-IDS 2017 dataset:
         - concatenates all csv files
         - fixes column names
         - resets the index (i.e, from 1 to n_rows)
-        - removes all `BENIGN` flows
         - handles missing values in `Flow Bytes/s`
         - drops ["Flow ID", "Source IP", "Destination IP", "Protocol", "Timestamp"]
 
     Args:
         data_folder_path: String. Folder path where .csv files reside.
+        keep_benign: Bool.
 
     Returns: pandas.DataFrame
 
@@ -53,8 +53,10 @@ def load_and_preprocess_dataset(data_folder_path):
 
     # preprocess
     df.columns = [col.strip() for col in df.columns]
-    df = df[df.Label != "BENIGN"]
     df["Flow Bytes/s"] = df["Flow Bytes/s"].fillna(value=0.0)
+    # remove benign flows
+    if not keep_benign:
+        df = df[df.Label != "BENIGN"]
     drop_cols = ["Flow ID", "Source IP", "Destination IP", "Protocol", "Timestamp"]
     df = df.drop(drop_cols, axis=1)
     df.reset_index(drop=True, inplace=True)
@@ -64,7 +66,7 @@ def load_and_preprocess_dataset(data_folder_path):
 
 
 def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_splits",
-                              test_size=0.05, seed=0, stratify=False, scale=False):
+                              test_size=0.05, seed=0, stratify=False, scale=False, keep_benign=False):
     """
     Generate a train-test-split of the CIC-IDS dataset:
         - loads and preprocess dataset
@@ -80,8 +82,8 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
         test_size: Float. Proportion of test samples
         seed: Int. For reproducibility.
         stratify: Bool. Whether to preserve the original distribution of labels in train/test.
-        scale: Boole. Whether to scale numeric columns.
-
+        scale: Bool. Whether to scale numeric columns.
+        keep_benign: Bool.
 
     """
     write_path = Path(write_path) / f"seed_{seed}"
@@ -89,7 +91,7 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
         write_path.mkdir(parents=True, exist_ok=True)
 
     print("Loading and preprocessing data...")
-    df = load_and_preprocess_dataset(data_folder_path)
+    df = load_and_preprocess_dataset(data_folder_path, keep_benign=keep_benign)
 
     # encode target col
     label_encoder = LabelEncoder()
@@ -143,6 +145,9 @@ if __name__ == '__main__':
 
     # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=False)
     # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=True)
+    # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
+    #                           write_path="./data/cic-ids-2017_splits_with_benign",
+    #                           stratify=True, scale=False, keep_benign=True)
 
     train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train_scaled.pt",
                                  "./data/cic-ids-2017_splits/seed_0/y_train_scaled.pt")
