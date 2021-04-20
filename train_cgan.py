@@ -18,6 +18,7 @@ TODO:
 
 """
 import argparse
+import joblib
 import torch
 from torch.utils import data
 
@@ -65,6 +66,9 @@ if __name__ == '__main__':
     label_distribution = {0: 0.01, 1: 0.23, 2: 0.02, 3: 0.38, 4: 0.01, 5: 0.01, 6: 0.015,
                           7: 0.01, 8: 0.01, 9: 0.265, 10: 0.01, 11: 0.01, 12: 0.01, 13: 0.01}
     label_weights = list(label_distribution.values())
+    classifier = joblib.load("./models/classifier/20-04-2021_16h02m/classifier.gz")
+    label_encoder = joblib.load("./data/cic-ids-2017_splits/seed_0/label_encoder.gz")
+    scaler = joblib.load("./data/cic-ids-2017_splits/seed_0/min_max_scaler.gz")
 
     print("Making GAN...")
     G = Generator(args.num_features, args.num_labels, latent_dim=args.latent_dim).to(device)
@@ -87,8 +91,8 @@ if __name__ == '__main__':
     for epoch in range(args.n_epochs):
 
         if epoch % args.eval_freq == 0:
-            exp.evaluate(test_dataset, col_to_idx, cols_to_plot,
-                         epoch, label_weights=label_weights)
+            exp.evaluate(test_dataset, col_to_idx, cols_to_plot, epoch, label_weights=label_weights,
+                         classifier=classifier, label_encoder=label_encoder, scaler=scaler)
 
         exp.train_epoch(train_loader, epoch, log_freq=args.log_freq,
                         log_tensorboard_freq=args.log_tensorboard_freq,

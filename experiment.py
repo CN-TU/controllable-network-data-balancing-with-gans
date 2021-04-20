@@ -14,6 +14,8 @@ from pathlib import Path
 from datetime import datetime
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
+from sklearn.metrics import classification_report
+from scikitplot.metrics import plot_confusion_matrix
 from torchvision.transforms import ToTensor
 
 
@@ -73,10 +75,15 @@ class BaseExperiment:
         """
         raise NotImplementedError()
 
-    def evaluate(self, test_loader, col_to_idx, cols_to_plot, step, num_samples=1024, label_weights=None):
+    def evaluate(self, test_loader, col_to_idx, cols_to_plot, step,
+                 num_samples=1024, label_weights=None,
+                 classifier=None, scaler=None, label_encoder=None):
         """
-        Compares generated feature distributions with actual distributions of the given test set.
-        Plots are written to TensorBoard
+        Evaluates the generated features:
+            - Compares generated feature distributions with actual distributions of the given test set.
+            - If classifier, scaler, label_encoder are given, computes the label prediction
+              of classifier and generates a confusion matrix.
+            - Plots are written to TensorBoard.
 
         Args:
             test_loader: PyTorch Dataset. Contains the actual flows, i.e.,
@@ -86,18 +93,49 @@ class BaseExperiment:
             step: Int. Current step/epoch.
             num_samples: Int. Number of fake samples to generate.
             label_weights: None or List. Weights used for random generation of fake labels.
+            classifier: sklearn model. Use for predicting the classes of the generated samples.
+            scaler: sklearn model. The classifier is trained on unscaled flows. However, the GAN (typically) is
+                    trained on scaled flows. Therefore, we have to unscale them using the original scaler.
+            label_encoder: sklearn model. Original label encoder used to create the dataset. Predicted numeric labels
+                           can be transformed to clear-name labels.
+
+        """
+        generated_features, labels = self.generate(num_samples, label_weights)
+        generated_features = generated_features.cpu()
+        labels = labels.cpu()
+
+        for col in cols_to_plot:
+            idx = col_to_idx[col]
+            real = test_loader.X[:, idx]
+            fake = generated_features[:, idx]
+            dist_plot = make_distplot(real, fake.cpu(), col)
+            self.summary_writer.add_image(col, dist_plot, step)
+
+        if classifier:
+            if scaler:
+                generated_features = scaler.inverse_transform(generated_features)
+            label_preds = classifier.predict(generated_features)
+            labels = label_encoder.inverse_transform(labels)
+            label_preds = label_encoder.inverse_transform(label_preds)
+            print(classification_report(labels, label_preds))
+            confusion_matrix = make_confusion_matrix(labels, label_preds)
+            self.summary_writer.add_image("confusion_matrix", confusion_matrix, step)
+
+    def generate(self, num_samples=1024, label_weights=None):
+        """
+        Generates the given number of fake flows.
+
+        Args:
+            num_samples: Int. Number of samples to generate
+            label_weights: None or List. Weights used for random generation of fake labels.
+
+        Returns: torch.Tensor of generated samples, torch.Tensor of generated labels
 
         """
         with torch.no_grad():
             noise, noise_labels = self.make_noise(num_samples, label_weights)
             generated_features = self.G(noise, noise_labels)
-
-            for col in cols_to_plot:
-                idx = col_to_idx[col]
-                real = test_loader.X[:, idx]
-                fake = generated_features[:, idx]
-                image = make_image(real, fake.cpu(), col)
-                self.summary_writer.add_image(col, image, step)
+        return generated_features, noise_labels
 
     def make_noise(self, num_samples, label_weights=None):
         noise = torch.FloatTensor(np.random.normal(0, 1, (num_samples, self.latent_dim))).to(self.device)
@@ -123,14 +161,33 @@ class BaseExperiment:
         }, self.model_save_dir / f"model-{epoch}.pt")
 
 
-def make_image(real, fake, feature_name):
+def make_distplot(real, fake, feature_name):
     """
     Images cannot be written to TensorBoard directly.
     Easiest way is to write them to IOBuffer, then convert to PyTorch tensor.
 
+    Creates a distribution plot of the given real/fake values in one plot.
+
     """
     sns.displot({"Real": real, "Fake": fake}, kind="kde", common_norm=False, fill=True, height=5, aspect=1.5)
     plt.title(feature_name)
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.close("all")
+    buf.seek(0)
+    image = PIL.Image.open(buf)
+    image = ToTensor()(image)
+    return image
+
+
+def make_confusion_matrix(y_true, y_pred):
+    """
+    Images cannot be written to TensorBoard directly.
+    Easiest way is to write them to IOBuffer, then convert to PyTorch tensor.
+
+    Creates a confusion matrix based on the given true and predicted labels.
+    """
+    plot_confusion_matrix(y_true, y_pred, figsize=(12, 10), x_tick_rotation=90)
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
     plt.close("all")

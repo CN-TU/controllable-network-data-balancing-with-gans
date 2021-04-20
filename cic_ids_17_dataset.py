@@ -14,6 +14,7 @@ import joblib
 import numpy as np
 
 from pathlib import Path
+from collections import Counter
 from torch.utils import data
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from sklearn.model_selection import train_test_split
@@ -55,8 +56,11 @@ def load_and_preprocess_dataset(data_folder_path, keep_benign=False):
     df.columns = [col.strip() for col in df.columns]
     df["Flow Bytes/s"] = df["Flow Bytes/s"].fillna(value=0.0)
     # remove benign flows
+    # LabelEncoder orders the labels alphabetically
+    # to have BENIGN as the very last label, add 'z' in the front
+    df.Label = df.Label.replace({"BENIGN": "zBENIGN"})
     if not keep_benign:
-        df = df[df.Label != "BENIGN"]
+        df = df[df.Label != "zBENIGN"]
     drop_cols = ["Flow ID", "Source IP", "Destination IP", "Protocol", "Timestamp"]
     df = df.drop(drop_cols, axis=1)
     df.reset_index(drop=True, inplace=True)
@@ -86,6 +90,10 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
         keep_benign: Bool.
 
     """
+    labels = ['Bot', 'DDoS', 'DoS GoldenEye', 'DoS Hulk', 'DoS Slowhttptest',  'DoS slowloris',
+              'FTP-Patator', 'Heartbleed', 'Infiltration', 'PortScan', 'SSH-Patator', 'Web Attack \x96 Brute Force',
+              'Web Attack \x96 Sql Injection', 'Web Attack \x96 XSS', 'zBENIGN']
+
     write_path = Path(write_path) / f"seed_{seed}"
     if not write_path.exists():
         write_path.mkdir(parents=True, exist_ok=True)
@@ -95,7 +103,8 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
 
     # encode target col
     label_encoder = LabelEncoder()
-    df.Label = label_encoder.fit_transform(df.Label)
+    label_encoder.fit(labels)
+    df.Label = label_encoder.transform(df.Label)
 
     # scale columns
     df = df[np.isfinite(df).all(1)]
@@ -141,20 +150,19 @@ class CIC17Dataset(data.Dataset):
 
 
 if __name__ == '__main__':
-    from collections import Counter
-
     # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=False)
     # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=True)
     # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
     #                           write_path="./data/cic-ids-2017_splits_with_benign",
     #                           stratify=True, scale=False, keep_benign=True)
 
+    # --------------------------------- Sanity checks  ---------------------------------
     train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train_scaled.pt",
                                  "./data/cic-ids-2017_splits/seed_0/y_train_scaled.pt")
     test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_test_scaled.pt",
                                 "./data/cic-ids-2017_splits/seed_0/y_test_scaled.pt")
 
-    # sanity checks
+    #  1. Label distribution checks
     print(len(train_dataset))  # 528728
     print(len(test_dataset))  # 27828
     train_label_counts = Counter(train_dataset.y)
@@ -166,20 +174,20 @@ if __name__ == '__main__':
     # {3: 0.41347, 9: 0.28532, 1: 0.23002, 2: 0.01851, 6: 0.01427, 10: 0.0106, 5: 0.01042, 4: 0.00988, 0: 0.00352,
     #  11: 0.0027, 13: 0.00119, 8: 7e-05, 12: 4e-05}
 
-    # PyTorch data loaders check
+    # 2. PyTorch data loaders check
     train_loader = data.DataLoader(train_dataset, batch_size=128)
     test_loader = data.DataLoader(test_dataset, batch_size=128)
     batch = next(iter(train_loader))
     print(batch[0].shape, batch[1].shape)
 
-    # inverse transform labels
+    # 3. Inverse transform labels checks
     class_names = torch.load("./data/cic-ids-2017_splits/seed_0/class_names.pt")
     label_encoder = joblib.load("./data/cic-ids-2017_splits/seed_0/label_encoder.gz")
     print("\nClasses: ", class_names)
     print("Transformed labels: ", *zip(train_dataset.y[:10],
                                        label_encoder.inverse_transform(train_dataset.y[:10])))
 
-    # inverse transform scaling
+    # 4. inverse transform scaling checks
     scaler = joblib.load("./data/cic-ids-2017_splits/seed_0/min_max_scaler.gz")
     train_dataset_unscaled = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train.pt",
                                           "./data/cic-ids-2017_splits/seed_0/y_train.pt")
