@@ -22,6 +22,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(f"Args: {args}")
 
+    np.random.seed(args.seed)
     time = datetime.now().strftime("%d-%m-%Y_%Hh%Mm")
     save_dir = Path(args.save_dir) / time
     save_dir.mkdir(parents=True, exist_ok=True)
