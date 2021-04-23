@@ -120,10 +120,10 @@ class BaseExperiment:
             report = classification_report(labels, label_preds, output_dict=True)
             macro_avg, weighted_avg = report["macro avg"], report["weighted avg"]
             metrics = {
-                "accuracy": report["accuracy"], "precision_macro": macro_avg["precision"],
-                "recall_macro": macro_avg["recall"], "f1_macro": weighted_avg["f1-score"],
-                "precision_weighted": weighted_avg["precision"], "recall_weighted": weighted_avg["recall"],
-                "f1_weighted": weighted_avg["f1-score"],
+                "accuracy": report["accuracy"], "macro_precision": macro_avg["precision"],
+                "macro_recall": macro_avg["recall"], "macro_f1": macro_avg["f1-score"],
+                "weighted_precision": weighted_avg["precision"], "weighted_recall": weighted_avg["recall"],
+                "weighted_f1": weighted_avg["f1-score"],
             }
             self.log_to_tensorboard(metrics, step, 0, 1)
             print(classification_report(labels, label_preds))
