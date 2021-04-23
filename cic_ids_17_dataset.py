@@ -126,10 +126,8 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
 
     print(f"Saving split to {write_path}...")
     suffix = "_scaled" if scale else ""
-    torch.save(X_train, write_path / f"X_train{suffix}.pt")
-    torch.save(y_train, write_path / f"y_train{suffix}.pt")
-    torch.save(X_test, write_path / f"X_test{suffix}.pt")
-    torch.save(y_test, write_path / f"y_test{suffix}.pt")
+    torch.save({"features": X_train, "labels": y_train}, write_path / f"train_dataset{suffix}.pt")
+    torch.save({"features": X_test, "labels": y_test}, write_path / f"test_dataset{suffix}.pt")
     # save labels and scaler to inverse-transform data
     joblib.dump(label_encoder, write_path / 'label_encoder.gz')
     torch.save(label_encoder.classes_, write_path / "class_names.pt")
@@ -138,9 +136,10 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
 
 class CIC17Dataset(data.Dataset):
 
-    def __init__(self, features_path, labels_path):
-        self.X = torch.load(features_path)
-        self.y = torch.load(labels_path)
+    def __init__(self, file_path):
+        dataset = torch.load(file_path)
+        self.X = dataset["features"]
+        self.y = dataset["labels"]
 
     def __len__(self):
         return len(self.y)
@@ -150,6 +149,8 @@ class CIC17Dataset(data.Dataset):
 
 
 if __name__ == '__main__':
+
+    # --------------------------------- Data generation  ---------------------------------
     # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=False)
     # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=True)
     # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
@@ -157,10 +158,8 @@ if __name__ == '__main__':
     #                           stratify=True, scale=False, keep_benign=True)
 
     # --------------------------------- Sanity checks  ---------------------------------
-    train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train_scaled.pt",
-                                 "./data/cic-ids-2017_splits/seed_0/y_train_scaled.pt")
-    test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_test_scaled.pt",
-                                "./data/cic-ids-2017_splits/seed_0/y_test_scaled.pt")
+    train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/train_dataset_scaled.pt")
+    test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/test_dataset_scaled.pt")
 
     #  1. Label distribution checks
     print(len(train_dataset))  # 528728
@@ -189,8 +188,7 @@ if __name__ == '__main__':
 
     # 4. inverse transform scaling checks
     scaler = joblib.load("./data/cic-ids-2017_splits/seed_0/min_max_scaler.gz")
-    train_dataset_unscaled = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/X_train.pt",
-                                          "./data/cic-ids-2017_splits/seed_0/y_train.pt")
+    train_dataset_unscaled = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/train_dataset.pt")
     X_unscaled = scaler.inverse_transform(train_dataset.X)
     print("\nInverse scaled X: ", X_unscaled[0][:10])
     print("Original unscaled X: ", train_dataset_unscaled.X[0][:10])

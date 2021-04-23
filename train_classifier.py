@@ -19,6 +19,8 @@ if __name__ == '__main__':
     parser.add_argument("--n_estimators", type=int, default=100)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--save_dir", type=str, default="./models/classifier")
+    parser.add_argument("--data_path", type=str,
+                        default="./data/cic-ids-2017_splits_with_benign/seed_0/")
     args = parser.parse_args()
     print(f"Args: {args}")
 
@@ -28,12 +30,10 @@ if __name__ == '__main__':
     save_dir.mkdir(parents=True, exist_ok=True)
 
     print("Loading dataset...")
-    train_dataset = CIC17Dataset("./data/cic-ids-2017_splits_with_benign/seed_0/X_train.pt",
-                                 "./data/cic-ids-2017_splits_with_benign/seed_0/y_train.pt")
-    test_dataset = CIC17Dataset("./data/cic-ids-2017_splits_with_benign/seed_0/X_test.pt",
-                                "./data/cic-ids-2017_splits_with_benign/seed_0/y_test.pt")
-    label_encoder = joblib.load("./data/cic-ids-2017_splits_with_benign/seed_0/label_encoder.gz")
-    column_names = torch.load("./data/cic-ids-2017_splits_with_benign/seed_0/column_names.pt")
+    train_dataset = CIC17Dataset(args.data_path + "train_dataset.pt")
+    test_dataset = CIC17Dataset(args.data_path + "test_dataset.pt")
+    label_encoder = joblib.load(args.data_path + "label_encoder.gz")
+    column_names = torch.load(args.data_path + "column_names.pt")
     idx_to_col = {i: col for i, col in enumerate(column_names)}
 
     label_distribution = {0: 0.01, 1: 0.23, 2: 0.02, 3: 0.38, 4: 0.01, 5: 0.01, 6: 0.015,
@@ -76,7 +76,6 @@ if __name__ == '__main__':
     plot_confusion_matrix(y_true_test, y_preds_test, figsize=(12, 10), x_tick_rotation=90, normalize=True, ax=ax)
     fig.savefig(save_dir / "confusion_matrix_normalized.png")
     plt.show()
-
 
     print("\n--------------- Feature ranking ---------------")
     importances = classifier.feature_importances_
