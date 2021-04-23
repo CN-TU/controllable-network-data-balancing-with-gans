@@ -117,9 +117,18 @@ class BaseExperiment:
             label_preds = classifier.predict(generated_features)
             labels = label_encoder.inverse_transform(labels)
             label_preds = label_encoder.inverse_transform(label_preds)
+            report = classification_report(labels, label_preds, output_dict=True)
+            macro_avg, weighted_avg = report["macro avg"], report["weighted avg"]
+            metrics = {
+                "accuracy": report["accuracy"], "precision_macro": macro_avg["precision"],
+                "recall_macro": macro_avg["recall"], "f1_macro": weighted_avg["f1-score"],
+                "precision_weighted": weighted_avg["precision"], "recall_weighted": weighted_avg["recall"],
+                "f1_weighted": weighted_avg["f1-score"],
+            }
+            self.log_to_tensorboard(metrics, step, 0, 1)
             print(classification_report(labels, label_preds))
             confusion_matrix = make_confusion_matrix(labels, label_preds)
-            self.summary_writer.add_image("confusion_matrix", confusion_matrix, step)
+            self.summary_writer.add_image("classifier_confusion_matrix", confusion_matrix, step)
 
     def generate(self, num_samples=1024, label_weights=None):
         """

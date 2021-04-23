@@ -23,7 +23,7 @@ import torch
 from torch.utils import data
 
 from experiment import CGANExperiment, CWGANExperiment
-from cgan import Generator, Discriminator
+from networks import Generator, Discriminator
 from cic_ids_17_dataset import CIC17Dataset
 
 
@@ -43,6 +43,8 @@ if __name__ == '__main__':
     parser.add_argument("--save_freq", type=int, default=1, help="Save model every n epochs.")
     parser.add_argument("--use_wgan", action="store_true", help="Indicates if the WGAN architecture should be used.")
     parser.add_argument("--use_gp", action="store_true", help="Indicates if gradient should be used in WGAN.")
+    parser.add_argument("--use_label_weights", action="store_true",
+                        help="Indicates if label weights should be used in generation procedure.")
     parser.add_argument("--log_dir", type=str, default="./tensorboard", help="TensorBoard log dir.")
     parser.add_argument("--model_save_dir", type=str, default="./models")
     args = parser.parse_args()
@@ -66,7 +68,7 @@ if __name__ == '__main__':
     label_distribution = {0: 0.01, 1: 0.23, 2: 0.02, 3: 0.38, 4: 0.01, 5: 0.01, 6: 0.015,
                           7: 0.01, 8: 0.01, 9: 0.265, 10: 0.01, 11: 0.01, 12: 0.01, 13: 0.01}
     label_weights = list(label_distribution.values())
-    classifier = joblib.load("./models/classifier/20-04-2021_16h02m/classifier.gz")
+    classifier = joblib.load("./models/classifier/23-04-2021_11h56m/classifier.gz")
     label_encoder = joblib.load("./data/cic-ids-2017_splits/seed_0/label_encoder.gz")
     scaler = joblib.load("./data/cic-ids-2017_splits/seed_0/min_max_scaler.gz")
 
@@ -91,12 +93,13 @@ if __name__ == '__main__':
     for epoch in range(args.n_epochs):
 
         if epoch % args.eval_freq == 0:
-            exp.evaluate(test_dataset, col_to_idx, cols_to_plot, epoch, label_weights=label_weights,
+            exp.evaluate(test_dataset, col_to_idx, cols_to_plot, epoch,
+                         label_weights=label_weights if args.use_label_weights else None,
                          classifier=classifier, label_encoder=label_encoder, scaler=scaler)
 
         exp.train_epoch(train_loader, epoch, log_freq=args.log_freq,
                         log_tensorboard_freq=args.log_tensorboard_freq,
-                        label_weights=label_weights)
+                        label_weights=label_weights if args.use_label_weights else None)
 
         if epoch % args.save_freq == 0:
             exp.save_model(epoch)
