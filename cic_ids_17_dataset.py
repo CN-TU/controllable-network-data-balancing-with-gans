@@ -70,7 +70,8 @@ def load_and_preprocess_dataset(data_folder_path, keep_benign=False):
 
 
 def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_splits",
-                              test_size=0.05, seed=0, stratify=False, scale=False, keep_benign=False):
+                              test_size=0.05, seed=0, stratify=False, scale=False, keep_benign=False,
+                              write_class_means=False):
     """
     Generate a train-test-split of the CIC-IDS dataset:
         - loads and preprocess dataset
@@ -88,6 +89,7 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
         stratify: Bool. Whether to preserve the original distribution of labels in train/test.
         scale: Bool. Whether to scale numeric columns.
         keep_benign: Bool.
+        write_class_means: Bool.
 
     """
     labels = ['Bot', 'DDoS', 'DoS GoldenEye', 'DoS Hulk', 'DoS Slowhttptest',  'DoS slowloris',
@@ -133,6 +135,11 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
     torch.save(label_encoder.classes_, write_path / "class_names.pt")
     torch.save(df.columns, write_path / "column_names.pt")
 
+    if write_class_means:
+        df_mean = pd.DataFrame(np.append(X, y.reshape(-1, 1), axis=1), columns=df.columns)
+        df_mean = df_mean.groupby("Label").mean()
+        torch.save(df_mean, write_path / f"class_means{suffix}.pt")
+
 
 class CIC17Dataset(data.Dataset):
 
@@ -140,6 +147,9 @@ class CIC17Dataset(data.Dataset):
         dataset = torch.load(file_path)
         self.X = dataset["features"]
         self.y = dataset["labels"]
+        # TODO: refactor such that CIC17Dataset is aware of scalers, column names, label encoder, class means
+        #  and loads them if they exist
+        #  requires to store scaled and unscaled splits into different directories (otherwise scaler is always there)
 
     def __len__(self):
         return len(self.y)
@@ -151,11 +161,13 @@ class CIC17Dataset(data.Dataset):
 if __name__ == '__main__':
 
     # --------------------------------- Data generation  ---------------------------------
-    # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=False)
-    # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling", stratify=True, scale=True)
-    # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
-    #                           write_path="./data/cic-ids-2017_splits_with_benign",
-    #                           stratify=True, scale=False, keep_benign=True)
+    generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
+                              stratify=True, scale=False, write_class_means=True)
+    generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
+                              stratify=True, scale=True, write_class_means=True)
+    generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
+                              write_path="./data/cic-ids-2017_splits_with_benign",
+                              stratify=True, scale=False, keep_benign=True, write_class_means=True)
 
     # --------------------------------- Sanity checks  ---------------------------------
     train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/train_dataset_scaled.pt")

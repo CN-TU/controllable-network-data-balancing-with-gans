@@ -111,7 +111,7 @@ class BaseExperiment:
             dist_plot = make_distplot(real, fake.cpu(), col)
             self.summary_writer.add_image(col, dist_plot, step)
 
-        if classifier:
+        if classifier and label_encoder:
             if scaler:
                 generated_features = scaler.inverse_transform(generated_features)
             label_preds = classifier.predict(generated_features)
@@ -375,7 +375,8 @@ class CWGANExperiment(BaseExperiment):
     def fit_discriminator(self, features, labels, generated_features, noise_labels):
         self.D_optimizer.zero_grad()
         validity_real = self.D(features.float(), labels)
-        validity_fake = self.D(generated_features.detach(), noise_labels)
+        validity_fake = self.D(generated_features if self.use_gradient_penalty else generated_features.detach(),
+                               noise_labels)
         D_loss_real = -torch.mean(validity_real)
         D_loss_fake = torch.mean(validity_fake)
         if self.use_gradient_penalty:
@@ -386,8 +387,9 @@ class CWGANExperiment(BaseExperiment):
         D_loss.backward()
         self.D_optimizer.step()
         # clip weights
-        for p in self.D.parameters():
-            p.data.clamp_(-0.01, 0.01)
+        if self.use_gradient_penalty:
+            for p in self.D.parameters():
+                p.data.clamp_(-0.01, 0.01)
         return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item()}
 
     def compute_gradient_penalty(self, features, labels, generated_features):

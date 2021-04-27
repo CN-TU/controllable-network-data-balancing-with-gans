@@ -61,9 +61,11 @@ if __name__ == '__main__':
     test_dataset = CIC17Dataset(args.data_path + "test_dataset_scaled.pt")
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size)
     test_loader = data.DataLoader(test_dataset, batch_size=args.batch_size)
+
     label_encoder = joblib.load(args.data_path + "label_encoder.gz")
     scaler = joblib.load(args.data_path + "min_max_scaler.gz")
     classifier = joblib.load(args.classifier_path)
+    class_means = torch.load(args.data_path + "class_means_scaled.pt")
     column_names = torch.load(args.data_path + "column_names.pt")
     cols_to_plot = ["Source Port", "Destination Port", "Flow Duration", "Flow Packets/s", "Fwd Packets/s",
                     "Bwd Packets/s", "Packet Length Mean", "Average Packet Size", "Idle Mean"]
@@ -94,7 +96,7 @@ if __name__ == '__main__':
 
         if epoch % args.eval_freq == 0:
             exp.evaluate(test_dataset, col_to_idx, cols_to_plot, epoch,
-                         label_weights=label_weights if args.use_label_weights else None,
+                         label_weights=label_weights,
                          classifier=classifier, label_encoder=label_encoder, scaler=scaler)
 
         exp.train_epoch(train_loader, epoch, log_freq=args.log_freq,
