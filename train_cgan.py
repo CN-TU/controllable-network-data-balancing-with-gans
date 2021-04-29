@@ -45,6 +45,7 @@ if __name__ == '__main__':
     parser.add_argument("--use_gp", action="store_true", help="Indicates if gradient should be used in WGAN.")
     parser.add_argument("--use_label_weights", action="store_true",
                         help="Indicates if label weights should be used in generation procedure.")
+    parser.add_argument("--run_significance_tests", action="store_true")
     parser.add_argument("--log_dir", type=str, default="./tensorboard", help="TensorBoard log dir.")
     parser.add_argument("--model_save_dir", type=str, default="./models")
     parser.add_argument("--data_path", type=str, default="./data/cic-ids-2017_splits/seed_0/")
@@ -96,8 +97,8 @@ if __name__ == '__main__':
 
         if epoch % args.eval_freq == 0:
             exp.evaluate(test_dataset, col_to_idx, cols_to_plot, epoch,
-                         label_weights=label_weights,
-                         classifier=classifier, label_encoder=label_encoder, scaler=scaler)
+                         label_weights=label_weights, classifier=classifier, label_encoder=label_encoder,
+                         scaler=scaler, run_significance_tests=args.run_significance_tests)
 
         exp.train_epoch(train_loader, epoch, log_freq=args.log_freq,
                         log_tensorboard_freq=args.log_tensorboard_freq,
@@ -105,3 +106,8 @@ if __name__ == '__main__':
 
         if epoch % args.save_freq == 0:
             exp.save_model(epoch)
+
+    exp.export_scalars_to_json()
+    if args.run_significance_tests:
+        exp.log_significance_tests_to_tensorboard()
+

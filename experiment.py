@@ -3,20 +3,16 @@ GAN implementations adjusted from
 - https://github.com/eriklindernoren/PyTorch-GAN
 
 """
-import io
 import torch
 import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-import PIL.Image
 
 from pathlib import Path
 from datetime import datetime
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 from sklearn.metrics import classification_report
-from scikitplot.metrics import plot_confusion_matrix
-from torchvision.transforms import ToTensor
+
+import utils
 
 
 class BaseExperiment:
@@ -76,8 +72,8 @@ class BaseExperiment:
         raise NotImplementedError()
 
     def evaluate(self, test_loader, col_to_idx, cols_to_plot, step,
-                 num_samples=1024, label_weights=None,
-                 classifier=None, scaler=None, label_encoder=None):
+                 num_samples=1024, label_weights=None, classifier=None,
+                 scaler=None, label_encoder=None, run_significance_tests=False):
         """
         Evaluates the generated features:
             - Compares generated feature distributions with actual distributions of the given test set.
@@ -98,6 +94,7 @@ class BaseExperiment:
                     trained on scaled flows. Therefore, we have to unscale them using the original scaler.
             label_encoder: sklearn model. Original label encoder used to create the dataset. Predicted numeric labels
                            can be transformed to clear-name labels.
+            run_significance_tests: Bool. Indicates whether significance test on feature columns should be run or not.
 
         """
         generated_features, labels = self.generate(num_samples, label_weights)
@@ -108,16 +105,15 @@ class BaseExperiment:
             idx = col_to_idx[col]
             real = test_loader.X[:, idx]
             fake = generated_features[:, idx]
-            dist_plot = make_distplot(real, fake.cpu(), col)
+            dist_plot = utils.make_distplot(real, fake.cpu(), col)
             self.summary_writer.add_image(col, dist_plot, step)
 
         if classifier and label_encoder:
-            if scaler:
-                generated_features = scaler.inverse_transform(generated_features)
-            label_preds = classifier.predict(generated_features)
-            labels = label_encoder.inverse_transform(labels)
+            label_preds = classifier.predict(generated_features if not scaler
+                                             else scaler.inverse_transform(generated_features))
+            labels_transformed = label_encoder.inverse_transform(labels)
             label_preds = label_encoder.inverse_transform(label_preds)
-            report = classification_report(labels, label_preds, output_dict=True)
+            report = classification_report(labels_transformed, label_preds, output_dict=True)
             macro_avg, weighted_avg = report["macro avg"], report["weighted avg"]
             metrics = {
                 "accuracy": report["accuracy"], "macro_precision": macro_avg["precision"],
@@ -125,10 +121,21 @@ class BaseExperiment:
                 "weighted_precision": weighted_avg["precision"], "weighted_recall": weighted_avg["recall"],
                 "weighted_f1": weighted_avg["f1-score"],
             }
+            metrics = {"classifier_" + k: v for k, v in metrics.items()}
             self.log_to_tensorboard(metrics, step, 0, 1)
-            print(classification_report(labels, label_preds))
-            confusion_matrix = make_confusion_matrix(labels, label_preds)
+            print(classification_report(labels_transformed, label_preds))
+            confusion_matrix = utils.make_confusion_matrix(labels_transformed, label_preds)
             self.summary_writer.add_image("classifier_confusion_matrix", confusion_matrix, step)
+
+        if run_significance_tests:
+            n_real_features_by_class = utils.run_significance_tests(
+                test_loader.X, test_loader.y,
+                generated_features, labels,
+                list(col_to_idx.keys()),
+                label_encoder.classes_
+            )
+            n_real_features_by_class = {"n_real_features_" + k: v for k, v in n_real_features_by_class.items()}
+            self.log_to_tensorboard(n_real_features_by_class, step, 0, 1)
 
     def generate(self, num_samples=1024, label_weights=None):
         """
@@ -152,7 +159,7 @@ class BaseExperiment:
                                                          num_samples, p=label_weights)).to(self.device)
         return noise, noise_labels
 
-    def log_to_output(self, stats, epoch, step, total_steps):
+    def log_to_commandline(self, stats, epoch, step, total_steps):
         stats_str = " | ".join([f"{k}: {v:.5f}" for k, v in stats.items()])
         print(f"\nEpoch {epoch} | Batch {step}/{total_steps} |  {stats_str}")
 
@@ -161,6 +168,31 @@ class BaseExperiment:
         for k, v in stats.items():
             self.summary_writer.add_scalar(k, v, global_step=global_step)
 
+    def export_scalars_to_json(self):
+        self.summary_writer.export_scalars_to_json(self.log_dir / "./all_scalars.json")
+
+    def log_significance_tests_to_tensorboard(self):
+        layout = {
+            "# of real features per class": {"Attack type":
+                                                 ["Multiline", ['n_real_features_Bot',
+                                                                'n_real_features_DDoS',
+                                                                'n_real_features_DoS GoldenEye',
+                                                                'n_real_features_DoS Hulk',
+                                                                'n_real_features_DoS Slowhttptest',
+                                                                'n_real_features_DoS slowloris',
+                                                                'n_real_features_FTP-Patator',
+                                                                'n_real_features_Heartbleed',
+                                                                'n_real_features_Infiltration',
+                                                                'n_real_features_PortScan',
+                                                                'n_real_features_SSH-Patator',
+                                                                'n_real_features_Web Attack \x96 Brute Force',
+                                                                'n_real_features_Web Attack \x96 Sql Injection',
+                                                                'n_real_features_Web Attack \x96 XSS',
+                                                                'n_real_features_zBENIGN']]
+                                             }
+        }
+        self.summary_writer.add_custom_scalars(layout)
+
     def save_model(self, epoch):
         torch.save({
             'G_state_dict': self.G.state_dict(),
@@ -168,42 +200,6 @@ class BaseExperiment:
             'optim_G_state_dict': self.G_optimizer.state_dict(),
             'optim_D_state_dict': self.D_optimizer.state_dict(),
         }, self.model_save_dir / f"model-{epoch}.pt")
-
-
-def make_distplot(real, fake, feature_name):
-    """
-    Images cannot be written to TensorBoard directly.
-    Easiest way is to write them to IOBuffer, then convert to PyTorch tensor.
-
-    Creates a distribution plot of the given real/fake values in one plot.
-
-    """
-    sns.displot({"Real": real, "Fake": fake}, kind="kde", common_norm=False, fill=True, height=5, aspect=1.5)
-    plt.title(feature_name)
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    plt.close("all")
-    buf.seek(0)
-    image = PIL.Image.open(buf)
-    image = ToTensor()(image)
-    return image
-
-
-def make_confusion_matrix(y_true, y_pred):
-    """
-    Images cannot be written to TensorBoard directly.
-    Easiest way is to write them to IOBuffer, then convert to PyTorch tensor.
-
-    Creates a confusion matrix based on the given true and predicted labels.
-    """
-    plot_confusion_matrix(y_true, y_pred, figsize=(12, 10), x_tick_rotation=90)
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    plt.close("all")
-    buf.seek(0)
-    image = PIL.Image.open(buf)
-    image = ToTensor()(image)
-    return image
 
 
 class CGANExperiment(BaseExperiment):
@@ -260,7 +256,7 @@ class CGANExperiment(BaseExperiment):
                 stats = {**G_stats, **D_stats}
                 running_stats = {k: v + stats[k] for k, v in running_stats.items()}
                 if step % log_freq == 0:
-                    self.log_to_output(stats, epoch, step, total_steps)
+                    self.log_to_commandline(stats, epoch, step, total_steps)
 
                 if self.log_dir and step % log_tensorboard_freq == 0:
                     self.log_to_tensorboard(stats, epoch, step, total_steps)
@@ -353,7 +349,7 @@ class CWGANExperiment(BaseExperiment):
                 stats = {**G_stats, **D_stats}
                 running_stats = {k: v + stats[k] for k, v in running_stats.items()}
                 if step % log_freq == 0:
-                    self.log_to_output(stats, epoch, step, total_steps)
+                    self.log_to_commandline(stats, epoch, step, total_steps)
 
                 if self.log_dir and step % log_tensorboard_freq == 0:
                     self.log_to_tensorboard(stats, epoch, step, total_steps)
