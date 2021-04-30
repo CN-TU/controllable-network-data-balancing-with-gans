@@ -84,3 +84,36 @@ def run_significance_tests(real_features, real_labels, generated_features, gener
 
     df_is_different = pd.DataFrame(stats, columns=column_names[:-1], index=class_names[:-1])
     return (df_is_different == False).sum(axis=1).to_dict()
+
+
+class CustomLogger:
+
+    def __init__(self, summary_writer):
+        self.summary_writer = summary_writer
+
+    @staticmethod
+    def log_to_commandline(stats, epoch, step, total_steps):
+        stats_str = " | ".join([f"{k}: {v:.5f}" for k, v in stats.items()])
+        print(f"\nEpoch {epoch} | Batch {step}/{total_steps} |  {stats_str}")
+
+    def log_to_tensorboard(self, stats, epoch, step, steps_per_epoch):
+        global_step = epoch * steps_per_epoch + step
+        for k, v in stats.items():
+            self.summary_writer.add_scalar(k, v, global_step=global_step)
+
+    def add_all_custom_scalars(self):
+        layout = {
+            "GAN losses": {
+                "combined": ["Multiline", ["GAN_losses/G_loss", "GAN_losses/D_loss"]],
+                "per_epoch": ["Multiline", ["GAN_epoch_losses/G_loss", "GAN_epoch_losses/D_loss"]]
+            },
+            "# of real features per class": {
+                "Attack type": ["Multiline", ['N_real_features']]
+            },
+            "Classifier metrics": {
+                "Weighted average metrics": ["Multiline", ['Classifier/weighted']],
+                "Macro average metrics": ["Multiline", ['Classifier/macro']],
+                "Accuracy": ["Multiline", ['Classifier/accuracy']]
+            }
+        }
+        self.summary_writer.add_custom_scalars(layout)

@@ -13,6 +13,7 @@ from tensorboardX import SummaryWriter
 from sklearn.metrics import classification_report
 
 import utils
+from utils import CustomLogger
 
 
 class BaseExperiment:
@@ -56,6 +57,7 @@ class BaseExperiment:
             # features = torch.zeros((1, self.D.num_features))
             # self.summary_writer.add_graph(self.G, [noise, labels])
             # self.summary_writer.add_graph(self.D, [features, labels])
+            self.logger = CustomLogger(self.summary_writer)
 
     def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, label_weights=None):
         """
@@ -121,8 +123,8 @@ class BaseExperiment:
                 "weighted_precision": weighted_avg["precision"], "weighted_recall": weighted_avg["recall"],
                 "weighted_f1": weighted_avg["f1-score"],
             }
-            metrics = {"classifier_" + k: v for k, v in metrics.items()}
-            self.log_to_tensorboard(metrics, step, 0, 1)
+            metrics = {"Classifier/" + k: v for k, v in metrics.items()}
+            self.logger.log_to_tensorboard(metrics, step, 0, 1)
             print(classification_report(labels_transformed, label_preds))
             confusion_matrix = utils.make_confusion_matrix(labels_transformed, label_preds)
             self.summary_writer.add_image("classifier_confusion_matrix", confusion_matrix, step)
@@ -134,8 +136,8 @@ class BaseExperiment:
                 list(col_to_idx.keys()),
                 label_encoder.classes_
             )
-            n_real_features_by_class = {"n_real_features_" + k: v for k, v in n_real_features_by_class.items()}
-            self.log_to_tensorboard(n_real_features_by_class, step, 0, 1)
+            n_real_features_by_class = {"n_real_features/" + k: v for k, v in n_real_features_by_class.items()}
+            self.logger.log_to_tensorboard(n_real_features_by_class, step, 0, 1)
 
     def generate(self, num_samples=1024, label_weights=None):
         """
@@ -158,40 +160,6 @@ class BaseExperiment:
         noise_labels = torch.LongTensor(np.random.choice(np.arange(0, self.num_labels),
                                                          num_samples, p=label_weights)).to(self.device)
         return noise, noise_labels
-
-    def log_to_commandline(self, stats, epoch, step, total_steps):
-        stats_str = " | ".join([f"{k}: {v:.5f}" for k, v in stats.items()])
-        print(f"\nEpoch {epoch} | Batch {step}/{total_steps} |  {stats_str}")
-
-    def log_to_tensorboard(self, stats, epoch, step, steps_per_epoch):
-        global_step = epoch * steps_per_epoch + step
-        for k, v in stats.items():
-            self.summary_writer.add_scalar(k, v, global_step=global_step)
-
-    def export_scalars_to_json(self):
-        self.summary_writer.export_scalars_to_json(self.log_dir / "./all_scalars.json")
-
-    def log_significance_tests_to_tensorboard(self):
-        layout = {
-            "# of real features per class": {"Attack type":
-                                                 ["Multiline", ['n_real_features_Bot',
-                                                                'n_real_features_DDoS',
-                                                                'n_real_features_DoS GoldenEye',
-                                                                'n_real_features_DoS Hulk',
-                                                                'n_real_features_DoS Slowhttptest',
-                                                                'n_real_features_DoS slowloris',
-                                                                'n_real_features_FTP-Patator',
-                                                                'n_real_features_Heartbleed',
-                                                                'n_real_features_Infiltration',
-                                                                'n_real_features_PortScan',
-                                                                'n_real_features_SSH-Patator',
-                                                                'n_real_features_Web Attack \x96 Brute Force',
-                                                                'n_real_features_Web Attack \x96 Sql Injection',
-                                                                'n_real_features_Web Attack \x96 XSS',
-                                                                'n_real_features_zBENIGN']]
-                                             }
-        }
-        self.summary_writer.add_custom_scalars(layout)
 
     def save_model(self, epoch):
         torch.save({
@@ -256,16 +224,17 @@ class CGANExperiment(BaseExperiment):
                 stats = {**G_stats, **D_stats}
                 running_stats = {k: v + stats[k] for k, v in running_stats.items()}
                 if step % log_freq == 0:
-                    self.log_to_commandline(stats, epoch, step, total_steps)
+                    self.logger.log_to_commandline(stats, epoch, step, total_steps)
 
                 if self.log_dir and step % log_tensorboard_freq == 0:
-                    self.log_to_tensorboard(stats, epoch, step, total_steps)
+                    stats = {"GAN_losses/" + k: v for k, v in stats.items()}
+                    self.logger.log_to_tensorboard(stats, epoch, step, total_steps)
                 pbar.update(1)
 
         # logs after epoch
         if self.log_dir:
-            stats_epoch = {"epoch_" + k: v / total_steps for k, v in running_stats.items()}
-            self.log_to_tensorboard(stats_epoch, epoch, 0, 1)
+            stats_epoch = {"GAN_epoch_losses/" + k: v / total_steps for k, v in running_stats.items()}
+            self.logger.log_to_tensorboard(stats_epoch, epoch, 0, 1)
 
     def fit_generator(self, batch_size, real, label_weights=None):
         self.G_optimizer.zero_grad()
@@ -349,16 +318,17 @@ class CWGANExperiment(BaseExperiment):
                 stats = {**G_stats, **D_stats}
                 running_stats = {k: v + stats[k] for k, v in running_stats.items()}
                 if step % log_freq == 0:
-                    self.log_to_commandline(stats, epoch, step, total_steps)
+                    self.logger.log_to_commandline(stats, epoch, step, total_steps)
 
                 if self.log_dir and step % log_tensorboard_freq == 0:
-                    self.log_to_tensorboard(stats, epoch, step, total_steps)
+                    stats = {"GAN_losses/" + k: v for k, v in stats.items()}
+                    self.logger.log_to_tensorboard(stats, epoch, step, total_steps)
                 pbar.update(1)
 
         # logs after epoch
         if self.log_dir:
-            stats_epoch = {"epoch_" + k: v / total_steps for k, v in running_stats.items()}
-            self.log_to_tensorboard(stats_epoch, epoch, 0, 1)
+            stats_epoch = {"GAN_epoch_losses/" + k: v / total_steps for k, v in running_stats.items()}
+            self.logger.log_to_tensorboard(stats_epoch, epoch, 0, 1)
 
     def fit_generator(self, noise, noise_labels):
         self.G_optimizer.zero_grad()

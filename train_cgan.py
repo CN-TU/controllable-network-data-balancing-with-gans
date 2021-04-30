@@ -107,7 +107,4 @@ if __name__ == '__main__':
         if epoch % args.save_freq == 0:
             exp.save_model(epoch)
 
-    exp.export_scalars_to_json()
-    if args.run_significance_tests:
-        exp.log_significance_tests_to_tensorboard()
-
+    exp.logger.add_all_custom_scalars()
