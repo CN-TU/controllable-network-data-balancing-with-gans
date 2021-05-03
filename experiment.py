@@ -136,7 +136,7 @@ class BaseExperiment:
                 list(col_to_idx.keys()),
                 label_encoder.classes_
             )
-            n_real_features_by_class = {"n_real_features/" + k: v for k, v in n_real_features_by_class.items()}
+            n_real_features_by_class = {"N_real_features/" + k: v for k, v in n_real_features_by_class.items()}
             self.logger.log_to_tensorboard(n_real_features_by_class, step, 0, 1)
 
     def generate(self, num_samples=1024, label_weights=None):
@@ -233,7 +233,7 @@ class CGANExperiment(BaseExperiment):
 
         # logs after epoch
         if self.log_dir:
-            stats_epoch = {"GAN_epoch_losses/" + k: v / total_steps for k, v in running_stats.items()}
+            stats_epoch = {"GAN_losses_epoch/" + k: v / total_steps for k, v in running_stats.items()}
             self.logger.log_to_tensorboard(stats_epoch, epoch, 0, 1)
 
     def fit_generator(self, batch_size, real, label_weights=None):
@@ -327,7 +327,7 @@ class CWGANExperiment(BaseExperiment):
 
         # logs after epoch
         if self.log_dir:
-            stats_epoch = {"GAN_epoch_losses/" + k: v / total_steps for k, v in running_stats.items()}
+            stats_epoch = {"GAN_losses_epoch/" + k: v / total_steps for k, v in running_stats.items()}
             self.logger.log_to_tensorboard(stats_epoch, epoch, 0, 1)
 
     def fit_generator(self, noise, noise_labels):

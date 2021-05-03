@@ -105,7 +105,7 @@ class CustomLogger:
         layout = {
             "GAN losses": {
                 "combined": ["Multiline", ["GAN_losses/G_loss", "GAN_losses/D_loss"]],
-                "per_epoch": ["Multiline", ["GAN_epoch_losses/G_loss", "GAN_epoch_losses/D_loss"]]
+                "per_epoch": ["Multiline", ["GAN_losses_epoch/G_loss", "GAN_losses_epoch/D_loss"]]
             },
             "# of real features per class": {
                 "Attack type": ["Multiline", ['N_real_features']]
