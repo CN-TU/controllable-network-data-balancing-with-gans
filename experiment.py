@@ -108,7 +108,7 @@ class BaseExperiment:
             real = test_loader.X[:, idx]
             fake = generated_features[:, idx]
             dist_plot = utils.make_distplot(real, fake.cpu(), col)
-            self.summary_writer.add_image(col, dist_plot, step)
+            self.summary_writer.add_image("Distributions/" + col, dist_plot, step)
 
         if classifier and label_encoder:
             label_preds = classifier.predict(generated_features if not scaler
@@ -168,6 +168,26 @@ class BaseExperiment:
             'optim_G_state_dict': self.G_optimizer.state_dict(),
             'optim_D_state_dict': self.D_optimizer.state_dict(),
         }, self.model_save_dir / f"model-{epoch}.pt")
+
+    def load_model(self, model_dict_path, load_optimizer=True):
+        checkpoint = torch.load(model_dict_path, map_location=self.device)
+        self.G.load_state_dict(checkpoint["G_state_dict"])
+        print("Loaded G weights.")
+        self.D.load_state_dict(checkpoint["D_state_dict"])
+        print("Loaded D weights.")
+        if load_optimizer:
+            self.G_optimizer.load_state_dict(checkpoint["optim_G_state_dict"])
+            for state in self.G_optimizer.state.values():
+                for k, v in state.items():
+                    if torch.is_tensor(v):
+                        state[k] = v.to(self.device)
+            print("Loaded G state_dict.")
+            self.D_optimizer.load_state_dict(checkpoint["optim_D_state_dict"])
+            for state in self.D_optimizer.state.values():
+                for k, v in state.items():
+                    if torch.is_tensor(v):
+                        state[k] = v.to(self.device)
+            print("Loaded D state_dict.")
 
 
 class CGANExperiment(BaseExperiment):
