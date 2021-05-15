@@ -75,7 +75,8 @@ class BaseExperiment:
 
     def evaluate(self, test_loader, col_to_idx, cols_to_plot, step,
                  num_samples=1024, label_weights=None, classifier=None,
-                 scaler=None, label_encoder=None, run_significance_tests=False):
+                 scaler=None, label_encoder=None, class_means=None,
+                 run_significance_tests=False, compute_euclidean_distances=False):
         """
         Evaluates the generated features:
             - Compares generated feature distributions with actual distributions of the given test set.
@@ -97,7 +98,8 @@ class BaseExperiment:
             label_encoder: sklearn model. Original label encoder used to create the dataset. Predicted numeric labels
                            can be transformed to clear-name labels.
             run_significance_tests: Bool. Indicates whether significance test on feature columns should be run or not.
-
+            compute_euclidean_distances: Bool. Indicates whether euclidean distances between generated features and mean
+                    flow of entire dataset should be computed per class.
         """
         generated_features, labels = self.generate(num_samples, label_weights)
         generated_features = generated_features.cpu()
@@ -138,6 +140,17 @@ class BaseExperiment:
             )
             n_real_features_by_class = {"N_real_features/" + k: v for k, v in n_real_features_by_class.items()}
             self.logger.log_to_tensorboard(n_real_features_by_class, step, 0, 1)
+
+        if compute_euclidean_distances and not class_means is None:
+            distance_by_class = utils.compute_euclidean_distance_by_class(
+                class_means,
+                generated_features,
+                labels,
+                list(col_to_idx.keys()),
+                label_encoder.classes_
+            )
+            distance_by_class = {"Distance_measures/" + k: v for k, v in distance_by_class.items()}
+            self.logger.log_to_tensorboard(distance_by_class, step, 0, 1)
 
     def generate(self, num_samples=1024, label_weights=None):
         """
@@ -333,6 +346,7 @@ class CWGANExperiment(BaseExperiment):
                 # train generator
                 if step % G_train_freq == 0:
                     generated_features, noise_labels, G_stats = self.fit_generator(noise, noise_labels)
+                    # generated_features, noise_labels, G_stats = self.fit_generator(generated_features, noise_labels)
 
                 # logging
                 stats = {**G_stats, **D_stats}
@@ -363,17 +377,18 @@ class CWGANExperiment(BaseExperiment):
         validity_real = self.D(features.float(), labels)
         validity_fake = self.D(generated_features if self.use_gradient_penalty else generated_features.detach(),
                                noise_labels)
-        D_loss_real = -torch.mean(validity_real)
+        # validity_fake = self.D(generated_features, noise_labels)
+        D_loss_real = torch.mean(validity_real)
         D_loss_fake = torch.mean(validity_fake)
         if self.use_gradient_penalty:
             gradient_penalty = self.compute_gradient_penalty(features.data, labels, generated_features.data)
-            D_loss = D_loss_real + D_loss_fake + self.lambda_gp * gradient_penalty
+            D_loss = -D_loss_real + D_loss_fake + self.lambda_gp * gradient_penalty
         else:
-            D_loss = D_loss_real + D_loss_fake
+            D_loss = -D_loss_real + D_loss_fake
         D_loss.backward()
         self.D_optimizer.step()
         # clip weights
-        if self.use_gradient_penalty:
+        if not self.use_gradient_penalty:
             for p in self.D.parameters():
                 p.data.clamp_(-0.01, 0.01)
         return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item()}
@@ -382,7 +397,7 @@ class CWGANExperiment(BaseExperiment):
         alpha = torch.FloatTensor(np.random.random((features.size(0), 1))).to(self.device)
         interpolates = (alpha * features.float() + ((1 - alpha) * generated_features)).requires_grad_(True)
         d_interpolates = self.D(interpolates, labels)
-        fake = torch.FloatTensor(features.shape[0], 1).fill_(1.0).to(self.device)
+        fake = torch.FloatTensor(features.shape[0], 1).fill_(1.0).requires_grad_(False).to(self.device)
         gradients = torch.autograd.grad(
             outputs=d_interpolates,
             inputs=interpolates,

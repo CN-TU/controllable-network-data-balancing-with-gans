@@ -17,6 +17,7 @@ TODO:
             - compare generated distributions against actual distributions, based on distance (e.g., Euclidean)
 
 """
+import json
 import argparse
 import joblib
 import torch
@@ -46,6 +47,7 @@ if __name__ == '__main__':
     parser.add_argument("--use_label_weights", action="store_true",
                         help="Indicates if label weights should be used in generation procedure.")
     parser.add_argument("--run_significance_tests", action="store_true")
+    parser.add_argument("--compute_euclidean_distances", action="store_true")
     parser.add_argument("--log_dir", type=str, default="./tensorboard", help="TensorBoard log dir.")
     parser.add_argument("--model_save_dir", type=str, default="./models")
     parser.add_argument("--data_path", type=str, default="./data/cic-ids-2017_splits/seed_0/")
@@ -60,7 +62,7 @@ if __name__ == '__main__':
     print("Loading dataset...")
     train_dataset = CIC17Dataset(args.data_path + "train_dataset_scaled.pt")
     test_dataset = CIC17Dataset(args.data_path + "test_dataset_scaled.pt")
-    train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size)
+    train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_loader = data.DataLoader(test_dataset, batch_size=args.batch_size)
 
     label_encoder = joblib.load(args.data_path + "label_encoder.gz")
@@ -78,8 +80,15 @@ if __name__ == '__main__':
     print("Making GAN...")
     G = Generator(args.num_features, args.num_labels, latent_dim=args.latent_dim).to(device)
     D = Discriminator(args.num_features, args.num_labels).to(device)
-    G_optimizer = torch.optim.Adam(G.parameters(), lr=args.lr)
-    D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr)
+    if args.use_gp:
+        G_optimizer = torch.optim.Adam(G.parameters(), lr=args.lr, betas=(0.5, 0.999))
+        D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr, betas=(0.5, 0.999))
+    elif args.use_wgan:
+        G_optimizer = torch.optim.RMSprop(G.parameters(), lr=args.lr)
+        D_optimizer = torch.optim.RMSprop(D.parameters(), lr=args.lr)
+    else:
+        G_optimizer = torch.optim.Adam(G.parameters(), lr=args.lr)
+        D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr)
 
     if args.use_wgan:
         exp = CWGANExperiment(G, D, G_optimizer, D_optimizer, criterion=None,
@@ -91,6 +100,14 @@ if __name__ == '__main__':
                              model_save_dir=model_save_dir, log_dir=log_dir)
     print("Generator:\n", G)
     print("Discriminator:\n", D)
+    print("G optimizer:\n", G_optimizer)
+    print("D optimizer:\n", D_optimizer)
+
+    print("Saving config params to ", log_dir)
+    all_params = {"args": vars(args), "log_dir": log_dir, "model_save_dir": model_save_dir,
+                  "G": str(G), "D": str(D), "G_optimizer": str(G), "D_optimizer": str(D)}
+    with open(exp.log_dir / "all_params.json", "w") as f:
+        json.dump(all_params, f)
 
     print("Starting train loop...")
     for epoch in range(args.n_epochs):
@@ -98,7 +115,8 @@ if __name__ == '__main__':
         if epoch % args.eval_freq == 0:
             exp.evaluate(test_dataset, col_to_idx, cols_to_plot, epoch,
                          label_weights=label_weights, classifier=classifier, label_encoder=label_encoder,
-                         scaler=scaler, run_significance_tests=args.run_significance_tests)
+                         scaler=scaler, class_means=class_means, run_significance_tests=args.run_significance_tests,
+                         compute_euclidean_distances=args.compute_euclidean_distances)
 
         exp.train_epoch(train_loader, epoch, log_freq=args.log_freq,
                         log_tensorboard_freq=args.log_tensorboard_freq,

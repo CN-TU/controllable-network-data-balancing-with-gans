@@ -86,6 +86,22 @@ def run_significance_tests(real_features, real_labels, generated_features, gener
     return (df_is_different == False).sum(axis=1).to_dict()
 
 
+def compute_euclidean_distance_by_class(class_means, generated_features, generated_labels,
+                                        column_names, class_names, num_labels=14):
+    flows = pd.DataFrame(np.append(generated_features, generated_labels.reshape(-1, 1), axis=1),
+                         columns=column_names)
+    distances = []
+    for label in range(num_labels):
+        generated_by_class = flows[flows.Label == label].drop("Label", axis=1)
+        mean_by_class = class_means.loc[label]
+        distance_by_feature = np.linalg.norm(generated_by_class - mean_by_class, axis=0)
+        distances.append(distance_by_feature)
+
+    distances = pd.DataFrame(distances, columns=column_names[:-1], index=range(0, num_labels))
+    distances.index = class_names[:-1]
+    return distances.mean(axis=1).to_dict()
+
+
 class CustomLogger:
 
     def __init__(self, summary_writer):
@@ -117,3 +133,26 @@ class CustomLogger:
             }
         }
         self.summary_writer.add_custom_scalars(layout)
+
+
+if __name__ == "__main__":
+    import torch
+    from networks import Generator, Discriminator
+    from experiment import CGANExperiment
+
+    # make model
+    G, D = Generator(79, 14), Discriminator(79, 14)
+    exp = CGANExperiment(G, D, None, None)
+    exp.load_model("./models/cgan/04-05-2021_14h52m/model-150.pt", load_optimizer=False)
+    label_distribution = {0: 0.01, 1: 0.23, 2: 0.02, 3: 0.38, 4: 0.01, 5: 0.01, 6: 0.015,
+                          7: 0.01, 8: 0.01, 9: 0.265, 10: 0.01, 11: 0.01, 12: 0.01, 13: 0.01}
+    label_weights = list(label_distribution.values())
+
+    column_names = torch.load("./data/cic-ids-2017_splits/seed_0/column_names.pt")
+    class_names = torch.load("./data/cic-ids-2017_splits/seed_0/class_names.pt")
+    class_means = torch.load("./data/cic-ids-2017_splits/seed_0/class_means_scaled.pt")
+
+    flows, labels = exp.generate(1024, label_weights)
+
+    distances = compute_euclidean_distance_by_class(class_means, flows, labels, column_names, class_names)
+    print(distances)
