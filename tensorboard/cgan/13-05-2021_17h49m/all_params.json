@@ -1,0 +1,22 @@
+{"args": {
+  "batch_size": 256,
+  "classifier_path": "./models/classifier/23-04-2021_11h56m/classifier.gz",
+  "compute_euclidean_distances": true,
+  "data_path": "./data/cic-ids-2017_splits/seed_0/",
+  "eval_freq": 1,
+  "latent_dim": 100,
+  "log_dir": "./tensorboard",
+  "log_freq": 2000,
+  "log_tensorboard_freq": 100,
+  "lr": 0.0002,
+  "model_save_dir": "./models",
+  "n_epochs": 150,
+  "num_cpu": 8,
+  "num_features": 79,
+  "num_labels": 14,
+  "run_significance_tests": true,
+  "save_freq": 50,
+  "use_gp": false,
+  "use_label_weights": true,
+  "use_wgan": false
+}, "log_dir": "./tensorboard/cgan", "model_save_dir": "./models/cgan", "G": "GeneratorSmall(\n  (label_embedding): Embedding(14, 14)\n  (model): Sequential(\n    (0): Linear(in_features=114, out_features=256, bias=True)\n    (1): BatchNorm1d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)\n    (2): ReLU()\n    (3): Linear(in_features=256, out_features=256, bias=True)\n    (4): BatchNorm1d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)\n    (5): ReLU()\n    (6): Linear(in_features=256, out_features=79, bias=True)\n    (7): Sigmoid()\n  )\n)", "D": "DiscriminatorSmall(\n  (label_embedding): Embedding(14, 14)\n  (model): Sequential(\n    (0): Linear(in_features=93, out_features=256, bias=True)\n    (1): LeakyReLU(negative_slope=0.2, inplace=True)\n    (2): Dropout(p=0.5, inplace=False)\n    (3): Linear(in_features=256, out_features=256, bias=True)\n    (4): LeakyReLU(negative_slope=0.2, inplace=True)\n    (5): Dropout(p=0.5, inplace=False)\n    (6): Linear(in_features=256, out_features=1, bias=True)\n  )\n)", "G_optimizer": "GeneratorSmall(\n  (label_embedding): Embedding(14, 14)\n  (model): Sequential(\n    (0): Linear(in_features=114, out_features=256, bias=True)\n    (1): BatchNorm1d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)\n    (2): ReLU()\n    (3): Linear(in_features=256, out_features=256, bias=True)\n    (4): BatchNorm1d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)\n    (5): ReLU()\n    (6): Linear(in_features=256, out_features=79, bias=True)\n    (7): Sigmoid()\n  )\n)", "D_optimizer": "DiscriminatorSmall(\n  (label_embedding): Embedding(14, 14)\n  (model): Sequential(\n    (0): Linear(in_features=93, out_features=256, bias=True)\n    (1): LeakyReLU(negative_slope=0.2, inplace=True)\n    (2): Dropout(p=0.5, inplace=False)\n    (3): Linear(in_features=256, out_features=256, bias=True)\n    (4): LeakyReLU(negative_slope=0.2, inplace=True)\n    (5): Dropout(p=0.5, inplace=False)\n    (6): Linear(in_features=256, out_features=1, bias=True)\n  )\n)"}
