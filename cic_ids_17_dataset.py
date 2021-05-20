@@ -143,13 +143,19 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
 
 class CIC17Dataset(data.Dataset):
 
-    def __init__(self, file_path):
+    def __init__(self, file_path, is_scaled=False):
+        folder_path = Path(file_path).parent
         dataset = torch.load(file_path)
         self.X = dataset["features"]
         self.y = dataset["labels"]
-        # TODO: refactor such that CIC17Dataset is aware of scalers, column names, label encoder, class means
-        #  and loads them if they exist
-        #  requires to store scaled and unscaled splits into different directories (otherwise scaler is always there)
+        self.column_names = torch.load(folder_path / "column_names.pt")
+        self.class_names = torch.load(folder_path / "class_names.pt")
+        self.label_encoder = joblib.load(folder_path / "label_encoder.gz")
+        if is_scaled:
+            self.scaler = joblib.load(folder_path / "min_max_scaler.gz")
+            self.class_means = torch.load(folder_path / "class_means_scaled.pt")
+        else:
+            self.class_means = torch.load(folder_path / "class_means.pt")
 
     def __len__(self):
         return len(self.y)
@@ -161,17 +167,17 @@ class CIC17Dataset(data.Dataset):
 if __name__ == '__main__':
 
     # --------------------------------- Data generation  ---------------------------------
-    generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
-                              stratify=True, scale=False, write_class_means=True)
-    generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
-                              stratify=True, scale=True, write_class_means=True)
-    generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
-                              write_path="./data/cic-ids-2017_splits_with_benign",
-                              stratify=True, scale=False, keep_benign=True, write_class_means=True)
+    # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
+    #                           stratify=True, scale=False, write_class_means=True)
+    # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
+    #                           stratify=True, scale=True, write_class_means=True)
+    # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
+    #                           write_path="./data/cic-ids-2017_splits_with_benign",
+    #                           stratify=True, scale=False, keep_benign=True, write_class_means=True)
 
     # --------------------------------- Sanity checks  ---------------------------------
-    train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/train_dataset_scaled.pt")
-    test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/test_dataset_scaled.pt")
+    train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/train_dataset_scaled.pt", is_scaled=True)
+    test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/test_dataset_scaled.pt", is_scaled=True)
 
     #  1. Label distribution checks
     print(len(train_dataset))  # 528728
@@ -192,14 +198,14 @@ if __name__ == '__main__':
     print(batch[0].shape, batch[1].shape)
 
     # 3. Inverse transform labels checks
-    class_names = torch.load("./data/cic-ids-2017_splits/seed_0/class_names.pt")
-    label_encoder = joblib.load("./data/cic-ids-2017_splits/seed_0/label_encoder.gz")
+    class_names = train_dataset.class_names
+    label_encoder = train_dataset.label_encoder
     print("\nClasses: ", class_names)
     print("Transformed labels: ", *zip(train_dataset.y[:10],
                                        label_encoder.inverse_transform(train_dataset.y[:10])))
 
     # 4. inverse transform scaling checks
-    scaler = joblib.load("./data/cic-ids-2017_splits/seed_0/min_max_scaler.gz")
+    scaler = train_dataset.scaler
     train_dataset_unscaled = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/train_dataset.pt")
     X_unscaled = scaler.inverse_transform(train_dataset.X)
     print("\nInverse scaled X: ", X_unscaled[0][:10])
