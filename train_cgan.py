@@ -51,7 +51,7 @@ if __name__ == '__main__':
     parser.add_argument("--log_dir", type=str, default="./tensorboard", help="TensorBoard log dir.")
     parser.add_argument("--model_save_dir", type=str, default="./models")
     parser.add_argument("--data_path", type=str, default="./data/cic-ids-2017_splits/seed_0/")
-    parser.add_argument("--classifier_path", type=str, default="./models/classifier/23-04-2021_11h56m/classifier.gz")
+    parser.add_argument("--classifier_path", type=str, default="./models/classifier/20-05-2021_12h01m/classifier.gz")
     args = parser.parse_args()
     print(f"Args: {args}")
 
@@ -60,19 +60,15 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu")
 
     print("Loading dataset...")
-    train_dataset = CIC17Dataset(args.data_path + "train_dataset_scaled.pt")
-    test_dataset = CIC17Dataset(args.data_path + "test_dataset_scaled.pt")
+    train_dataset = CIC17Dataset(args.data_path + "train_dataset_scaled.pt", is_scaled=True)
+    test_dataset = CIC17Dataset(args.data_path + "test_dataset_scaled.pt", is_scaled=True)
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_loader = data.DataLoader(test_dataset, batch_size=args.batch_size)
 
-    label_encoder = joblib.load(args.data_path + "label_encoder.gz")
-    scaler = joblib.load(args.data_path + "min_max_scaler.gz")
     classifier = joblib.load(args.classifier_path)
-    class_means = torch.load(args.data_path + "class_means_scaled.pt")
-    column_names = torch.load(args.data_path + "column_names.pt")
     cols_to_plot = ["Source Port", "Destination Port", "Flow Duration", "Flow Packets/s", "Fwd Packets/s",
                     "Bwd Packets/s", "Packet Length Mean", "Average Packet Size", "Idle Mean"]
-    col_to_idx = {col: i for i, col in enumerate(column_names)}
+    col_to_idx = {col: i for i, col in enumerate(train_dataset.column_names)}
     label_distribution = {0: 0.01, 1: 0.23, 2: 0.02, 3: 0.38, 4: 0.01, 5: 0.01, 6: 0.015,
                           7: 0.01, 8: 0.01, 9: 0.265, 10: 0.01, 11: 0.01, 12: 0.01, 13: 0.01}
     label_weights = list(label_distribution.values())
@@ -114,8 +110,9 @@ if __name__ == '__main__':
 
         if epoch % args.eval_freq == 0:
             exp.evaluate(test_dataset, col_to_idx, cols_to_plot, epoch,
-                         label_weights=label_weights, classifier=classifier, label_encoder=label_encoder,
-                         scaler=scaler, class_means=class_means, run_significance_tests=args.run_significance_tests,
+                         label_weights=label_weights, classifier=classifier, label_encoder=test_dataset.label_encoder,
+                         scaler=test_dataset.scaler, class_means=test_dataset.class_means,
+                         run_significance_tests=args.run_significance_tests,
                          compute_euclidean_distances=args.compute_euclidean_distances)
 
         exp.train_epoch(train_loader, epoch, log_freq=args.log_freq,

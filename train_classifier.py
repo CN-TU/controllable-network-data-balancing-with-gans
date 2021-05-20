@@ -1,6 +1,5 @@
 import argparse
 import joblib
-import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -9,6 +8,7 @@ from pathlib import Path
 from datetime import datetime
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
+from sklearn.model_selection import cross_validate
 from scikitplot.metrics import plot_confusion_matrix
 
 from cic_ids_17_dataset import CIC17Dataset
@@ -21,6 +21,8 @@ if __name__ == '__main__':
     parser.add_argument("--save_dir", type=str, default="./models/classifier")
     parser.add_argument("--data_path", type=str,
                         default="./data/cic-ids-2017_splits_with_benign/seed_0/")
+    parser.add_argument("--remove_benign", action="store_true")
+    parser.add_argument("--cross_validate", action="store_true")
     args = parser.parse_args()
     print(f"Args: {args}")
 
@@ -32,16 +34,33 @@ if __name__ == '__main__':
     print("Loading dataset...")
     train_dataset = CIC17Dataset(args.data_path + "train_dataset.pt")
     test_dataset = CIC17Dataset(args.data_path + "test_dataset.pt")
-    label_encoder = joblib.load(args.data_path + "label_encoder.gz")
-    column_names = torch.load(args.data_path + "column_names.pt")
-    idx_to_col = {i: col for i, col in enumerate(column_names)}
+    idx_to_col = {i: col for i, col in enumerate(train_dataset.column_names)}
 
-    label_distribution = {0: 0.01, 1: 0.23, 2: 0.02, 3: 0.38, 4: 0.01, 5: 0.01, 6: 0.015,
-                          7: 0.01, 8: 0.01, 9: 0.265, 10: 0.01, 11: 0.01, 12: 0.01, 13: 0.01}
+    if args.remove_benign:
+        benign_label = int(np.where(train_dataset.class_names == "zBENIGN")[0])
+        idx_malicious_train = np.where(train_dataset.y != benign_label)[0]
+        train_dataset.X = train_dataset.X[idx_malicious_train]
+        train_dataset.y = train_dataset.y[idx_malicious_train]
+
+        idx_malicious_test = np.where(test_dataset.y != benign_label)[0]
+        test_dataset.X = test_dataset.X[idx_malicious_test]
+        test_dataset.y = test_dataset.y[idx_malicious_test]
+
+    # label_distribution = {0: 0.01, 1: 0.23, 2: 0.02, 3: 0.38, 4: 0.01, 5: 0.01, 6: 0.015,
+    #                       7: 0.01, 8: 0.01, 9: 0.265, 10: 0.01, 11: 0.01, 12: 0.01, 13: 0.01}
 
     print("\nMaking Classifier...")
     classifier = RandomForestClassifier(n_estimators=args.n_estimators, random_state=args.seed,
-                                        n_jobs=-1, verbose=2, class_weight=None)
+                                        n_jobs=-1, verbose=1, class_weight=None)
+    if args.cross_validate:
+        print("\nCross validating...")
+        scores = cross_validate(classifier, train_dataset.X, train_dataset.y,
+                                scoring=["accuracy", "balanced_accuracy", "f1_macro", "f1_weighted"], cv=5)
+        print("\n--------------- Cross validation statistics ---------------")
+        print(f"Mean accuracy: {scores['test_accuracy'].mean()} |"
+              f" Mean balanced-accuracy: {scores['test_balanced_accuracy'].mean()} |"
+              f" Mean f1-macro: {scores['test_f1_macro'].mean()} |"
+              f" Mean f1-weighted: {scores['test_f1_weighted'].mean()}")
 
     print("\nStarting training...")
     classifier.fit(train_dataset.X, train_dataset.y)
@@ -49,20 +68,10 @@ if __name__ == '__main__':
     print(f"\nSaving classifier to {save_dir}")
     joblib.dump(classifier, save_dir / "classifier.gz")
 
-    print("\nEvaluating...")
-
-    # print(\n"--------------- Train statistics ---------------")
-    # y_preds_train = classifier.predict(train_dataset.X)
-    # y_preds_train = label_encoder.inverse_transform(y_preds_train)
-    # y_true_train = label_encoder.inverse_transform(train_dataset.y)
-    # print(classification_report(y_true_train, y_preds_train))
-    # plot_confusion_matrix(y_true_train, y_preds_train, figsize=(12, 10), x_tick_rotation=90)
-    # plt.show()
-
     print("\n--------------- Test statistics ---------------")
     y_preds_test = classifier.predict(test_dataset.X)
-    y_preds_test = label_encoder.inverse_transform(y_preds_test)
-    y_true_test = label_encoder.inverse_transform(test_dataset.y)
+    y_preds_test = train_dataset.label_encoder.inverse_transform(y_preds_test)
+    y_true_test = train_dataset.label_encoder.inverse_transform(test_dataset.y)
     print(classification_report(y_true_test, y_preds_test))
     report = classification_report(y_true_test, y_preds_test, output_dict=True)
     df_report = pd.DataFrame.from_dict(report).to_csv(save_dir / "classification_report.csv")
