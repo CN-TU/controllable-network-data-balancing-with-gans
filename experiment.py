@@ -152,21 +152,26 @@ class BaseExperiment:
             distance_by_class = {"Distance_measures/" + k: v for k, v in distance_by_class.items()}
             self.logger.log_to_tensorboard(distance_by_class, step, 0, 1)
 
-    def generate(self, num_samples=1024, label_weights=None):
+    def generate(self, num_samples=1024, label_weights=None, scaler=None, label_encoder=None):
         """
         Generates the given number of fake flows.
 
         Args:
             num_samples: Int. Number of samples to generate
             label_weights: None or List. Weights used for random generation of fake labels.
-
+            scaler: sklearn model.
+            label_encoder: sklearn model.
         Returns: torch.Tensor of generated samples, torch.Tensor of generated labels
 
         """
         with torch.no_grad():
-            noise, noise_labels = self.make_noise(num_samples, label_weights)
-            generated_features = self.G(noise, noise_labels)
-        return generated_features, noise_labels
+            noise, labels = self.make_noise(num_samples, label_weights)
+            generated_features = self.G(noise, labels)
+        if scaler:
+            generated_features = scaler.inverse_transform(generated_features)
+        if label_encoder:
+            labels = label_encoder.inverse_transform(labels)
+        return generated_features, labels
 
     def make_noise(self, num_samples, label_weights=None):
         noise = torch.FloatTensor(np.random.normal(0, 1, (num_samples, self.latent_dim))).to(self.device)
