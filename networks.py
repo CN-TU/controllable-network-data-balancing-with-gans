@@ -58,9 +58,8 @@ class DiscriminatorSmall(nn.Module):
         return validity
 
 
-
 class Generator(nn.Module):
-    def __init__(self, num_features, num_labels, latent_dim=100, embed_dim=50):
+    def __init__(self, num_features, num_labels, latent_dim=100):
         super().__init__()
         self.num_features = num_features
         self.num_labels = num_labels
@@ -70,7 +69,7 @@ class Generator(nn.Module):
         def block(in_dim, out_dim, normalize=True):
             layers = [nn.Linear(in_dim, out_dim)]
             if normalize:
-                layers.append(nn.BatchNorm1d(out_dim, 0.8))
+                layers.append(nn.BatchNorm1d(out_dim))
             layers.append(nn.LeakyReLU(0.2, inplace=True))
             return layers
 
@@ -88,7 +87,7 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, num_features, num_labels, embed_dim=50):
+    def __init__(self, num_features, num_labels):
         super().__init__()
         self.num_features = num_features
         self.num_labels = num_labels

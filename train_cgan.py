@@ -23,7 +23,7 @@ import joblib
 import torch
 from torch.utils import data
 
-from experiment import CGANExperiment, CWGANExperiment
+from gans import CGAN, CWGAN
 from networks import Generator, Discriminator
 from cic_ids_17_dataset import CIC17Dataset
 
@@ -32,11 +32,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_epochs", type=int, default=200)
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--num_cpu", type=int, default=8)
+    parser.add_argument("--num_cpu", type=int, default=-1)
     parser.add_argument("--latent_dim", type=int, default=100)
     parser.add_argument("--num_features", type=int, default=79)
     parser.add_argument("--num_labels", type=int, default=14)
+    parser.add_argument("--G_train_freq", type=int, default=1)
     parser.add_argument("--lr", type=float, default=0.0002)
+    parser.add_argument("--clip_val", type=float, default=0.1, help="Gradient clipping. Only used in WGAN.")
     parser.add_argument("--log_freq", type=int, default=100, help="Write logs to commandline every n steps.")
     parser.add_argument("--log_tensorboard_freq", type=int,
                         default=100, help="Write logs to TensorBoard every n steps.")
@@ -87,13 +89,13 @@ if __name__ == '__main__':
         D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr)
 
     if args.use_wgan:
-        exp = CWGANExperiment(G, D, G_optimizer, D_optimizer, criterion=None,
-                              use_gradient_penalty=args.use_gp, model_save_dir=model_save_dir, log_dir=log_dir)
+        exp = CWGAN(G, D, G_optimizer, D_optimizer, criterion=None, use_gradient_penalty=args.use_gp,
+                    model_save_dir=model_save_dir, log_dir=log_dir, clip_val=args.clip_val)
     else:
         # criterion = torch.nn.MSELoss()
         criterion = torch.nn.BCEWithLogitsLoss()
-        exp = CGANExperiment(G, D, G_optimizer, D_optimizer, criterion,
-                             model_save_dir=model_save_dir, log_dir=log_dir)
+        exp = CGAN(G, D, G_optimizer, D_optimizer, criterion, model_save_dir=model_save_dir, log_dir=log_dir)
+
     print("Generator:\n", G)
     print("Discriminator:\n", D)
     print("G optimizer:\n", G_optimizer)
@@ -117,7 +119,8 @@ if __name__ == '__main__':
 
         exp.train_epoch(train_loader, epoch, log_freq=args.log_freq,
                         log_tensorboard_freq=args.log_tensorboard_freq,
-                        label_weights=label_weights if args.use_label_weights else None)
+                        label_weights=label_weights if args.use_label_weights else None,
+                        G_train_freq=args.G_train_freq)
 
         if epoch % args.save_freq == 0:
             exp.save_model(epoch)

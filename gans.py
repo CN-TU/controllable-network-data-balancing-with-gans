@@ -13,10 +13,10 @@ from tensorboardX import SummaryWriter
 from sklearn.metrics import classification_report
 
 import utils
-from utils import CustomLogger
+from utils import Logger
 
 
-class BaseExperiment:
+class BaseGAN:
 
     def __init__(self, G, D, G_optimizer, D_optimizer, criterion=None, model_save_dir=None, log_dir=None, device=None):
         """
@@ -51,15 +51,9 @@ class BaseExperiment:
             Path(self.log_dir).mkdir(parents=True, exist_ok=True)
             self.summary_writer = SummaryWriter(self.log_dir)
             print("Writing logs to: ", self.log_dir)
-            # # dummy inputs to save graph (cannot save BOTH generator and discriminator unfortunately)
-            # noise = torch.zeros((1, self.G.latent_dim))
-            # labels = torch.zeros(1, dtype=torch.long)
-            # features = torch.zeros((1, self.D.num_features))
-            # self.summary_writer.add_graph(self.G, [noise, labels])
-            # self.summary_writer.add_graph(self.D, [features, labels])
-            self.logger = CustomLogger(self.summary_writer)
+            self.logger = Logger(self.summary_writer)
 
-    def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, label_weights=None):
+    def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, G_train_freq=1, label_weights=None):
         """
         Runs a single training epoch.
 
@@ -71,6 +65,32 @@ class BaseExperiment:
             label_weights: None or List. Weights used for random generation of fake labels.
 
         """
+        total_steps = len(train_loader)
+        running_stats = {"G_loss": 0, "D_loss": 0, "D_loss_fake": 0, "D_loss_real": 0}
+        with tqdm(total=total_steps, desc="Train loop") as pbar:
+            for step, (features, labels) in enumerate(train_loader):
+                features = features.to(self.device)
+                labels = labels.to(self.device)
+
+                # update params
+                stats = self._train_epoch(features, labels, step, G_train_freq, label_weights)
+
+                # logging
+                running_stats = {k: v + stats[k] for k, v in running_stats.items()}
+                if step % log_freq == 0:
+                    self.logger.log_to_commandline(stats, epoch, step, total_steps)
+
+                if self.log_dir and step % log_tensorboard_freq == 0:
+                    stats = {"GAN_losses/" + k: v for k, v in stats.items()}
+                    self.logger.log_to_tensorboard(stats, epoch, step, total_steps)
+                pbar.update(1)
+
+        # logs after epoch
+        if self.log_dir:
+            stats_epoch = {"GAN_losses_epoch/" + k: v / total_steps for k, v in running_stats.items()}
+            self.logger.log_to_tensorboard(stats_epoch, epoch, 0, 1)
+
+    def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None):
         raise NotImplementedError()
 
     def evaluate(self, test_loader, col_to_idx, cols_to_plot, step,
@@ -208,7 +228,7 @@ class BaseExperiment:
             print("Loaded D state_dict.")
 
 
-class CGANExperiment(BaseExperiment):
+class CGAN(BaseGAN):
 
     def __init__(self, G, D, G_optimizer, D_optimizer, criterion=None, model_save_dir=None, log_dir=None, device=None):
         """
@@ -226,53 +246,26 @@ class CGANExperiment(BaseExperiment):
         """
         super().__init__(G, D, G_optimizer, D_optimizer, criterion, model_save_dir, log_dir, device)
 
-    def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, label_weights=None):
+    def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None):
         """
-        Runs a single training epoch.
-
+        Fits GAN. Is called by train_epoch() method.
         Args:
-            train_loader: torch.utils.data.DataLoader. Iterable over dataset.
-            epoch: Int. Current epoch, important for TensorBoard logging.
-            log_freq: Int. Determines the logging frequency for commandline outputs.
-            log_tensorboard_freq: Int. Determines the logging frequency of TensorBoard logs.
-            label_weights: None or List. Weights used for random generation of fake labels.
+            features: torch.Tensor.
+            labels: torch.Tensor.
+            label_weights:
+
+        Returns: a dictionary, stats
 
         """
-        total_steps = len(train_loader)
-        running_stats = {"G_loss": 0, "D_loss": 0, "D_loss_fake": 0, "D_loss_real": 0}
-        with tqdm(total=total_steps, desc="Train loop") as pbar:
-            for step, (features, labels) in enumerate(train_loader):
-                features = features.to(self.device)
-                labels = labels.to(self.device)
-
-                # ground truths
-                batch_size = features.shape[0]
-                real = torch.FloatTensor(batch_size, 1).fill_(1.0).to(self.device)
-                fake = torch.FloatTensor(batch_size, 1).fill_(0.0).to(self.device)
-
-                # train generator
-                generated_features, noise_labels, G_stats = self.fit_generator(batch_size, real,
-                                                                               label_weights=label_weights)
-
-                # train discriminator
-                D_stats = self.fit_discriminator(features, labels, generated_features,
-                                                 noise_labels, real, fake)
-
-                # logging
-                stats = {**G_stats, **D_stats}
-                running_stats = {k: v + stats[k] for k, v in running_stats.items()}
-                if step % log_freq == 0:
-                    self.logger.log_to_commandline(stats, epoch, step, total_steps)
-
-                if self.log_dir and step % log_tensorboard_freq == 0:
-                    stats = {"GAN_losses/" + k: v for k, v in stats.items()}
-                    self.logger.log_to_tensorboard(stats, epoch, step, total_steps)
-                pbar.update(1)
-
-        # logs after epoch
-        if self.log_dir:
-            stats_epoch = {"GAN_losses_epoch/" + k: v / total_steps for k, v in running_stats.items()}
-            self.logger.log_to_tensorboard(stats_epoch, epoch, 0, 1)
+        batch_size = features.shape[0]
+        real = torch.FloatTensor(batch_size, 1).fill_(1.0).to(self.device)
+        fake = torch.FloatTensor(batch_size, 1).fill_(0.0).to(self.device)
+        # train generator
+        generated_features, noise_labels, G_stats = self.fit_generator(batch_size, real, label_weights=label_weights)
+        # train discriminator
+        D_stats = self.fit_discriminator(features, labels, generated_features,
+                                         noise_labels, real, fake)
+        return {**G_stats, **D_stats}
 
     def fit_generator(self, batch_size, real, label_weights=None):
         self.G_optimizer.zero_grad()
@@ -297,9 +290,9 @@ class CGANExperiment(BaseExperiment):
         return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item()}
 
 
-class CWGANExperiment(BaseExperiment):
+class CWGAN(BaseGAN):
 
-    def __init__(self, G, D, G_optimizer, D_optimizer, use_gradient_penalty=False,
+    def __init__(self, G, D, G_optimizer, D_optimizer, clip_val=0.1, use_gradient_penalty=False,
                  criterion=None, model_save_dir=None, log_dir=None, device=None):
         """
         Implement the conditional Wasserstein-GAN architecture.
@@ -316,58 +309,25 @@ class CWGANExperiment(BaseExperiment):
         """
         super().__init__(G, D, G_optimizer, D_optimizer, criterion, model_save_dir, log_dir, device)
         self.use_gradient_penalty = use_gradient_penalty
+        self.clip_val = clip_val
         self.lambda_gp = 10
 
-    def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1,
-                    G_train_freq=5, label_weights=None):
-        """
-        Runs a single training epoch.
+    def _train_epoch(self, features, labels, step, G_train_freq=5, label_weights=None):
+        batch_size = features.shape[0]
+        noise, noise_labels = self.make_noise(batch_size, label_weights)
+        generated_features = self.G(noise, noise_labels)
 
-        Args:
-            train_loader: torch.utils.data.DataLoader. Iterable over dataset.
-            epoch: Int. Current epoch, important for TensorBoard logging.
-            log_freq: Int. Determines the logging frequency for commandline outputs.
-            log_tensorboard_freq: Int. Determines the logging frequency of TensorBoard logs.
-            G_train_freq:
-            label_weights: None or List. Weights used for random generation of fake labels.
+        # train discriminator
+        D_stats = self.fit_discriminator(features, labels, generated_features, noise_labels)
 
-        """
-        total_steps = len(train_loader)
-        running_stats = {"G_loss": 0, "D_loss": 0, "D_loss_fake": 0, "D_loss_real": 0}
-        with tqdm(total=total_steps, desc="Train loop") as pbar:
-            for step, (features, labels) in enumerate(train_loader):
-                features = features.to(self.device)
-                labels = labels.to(self.device)
+        # train generator
+        if step % G_train_freq == 0:
+            noise, noise_labels = self.make_noise(batch_size, label_weights)
+            generated_features, noise_labels, G_stats = self.fit_generator(noise, noise_labels)
+            # generated_features, noise_labels, G_stats = self.fit_generator(generated_features, noise_labels)
 
-                # ground truths
-                batch_size = features.shape[0]
-
-                noise, noise_labels = self.make_noise(batch_size, label_weights)
-                generated_features = self.G(noise, noise_labels)
-
-                # train discriminator
-                D_stats = self.fit_discriminator(features, labels, generated_features, noise_labels)
-
-                # train generator
-                if step % G_train_freq == 0:
-                    generated_features, noise_labels, G_stats = self.fit_generator(noise, noise_labels)
-                    # generated_features, noise_labels, G_stats = self.fit_generator(generated_features, noise_labels)
-
-                # logging
-                stats = {**G_stats, **D_stats}
-                running_stats = {k: v + stats[k] for k, v in running_stats.items()}
-                if step % log_freq == 0:
-                    self.logger.log_to_commandline(stats, epoch, step, total_steps)
-
-                if self.log_dir and step % log_tensorboard_freq == 0:
-                    stats = {"GAN_losses/" + k: v for k, v in stats.items()}
-                    self.logger.log_to_tensorboard(stats, epoch, step, total_steps)
-                pbar.update(1)
-
-        # logs after epoch
-        if self.log_dir:
-            stats_epoch = {"GAN_losses_epoch/" + k: v / total_steps for k, v in running_stats.items()}
-            self.logger.log_to_tensorboard(stats_epoch, epoch, 0, 1)
+        # logging
+        return {**G_stats, **D_stats}
 
     def fit_generator(self, noise, noise_labels):
         self.G_optimizer.zero_grad()
@@ -386,8 +346,11 @@ class CWGANExperiment(BaseExperiment):
         D_loss_real = torch.mean(validity_real)
         D_loss_fake = torch.mean(validity_fake)
         if self.use_gradient_penalty:
-            gradient_penalty = self.compute_gradient_penalty(features.data, labels, generated_features.data)
-            D_loss = -D_loss_real + D_loss_fake + self.lambda_gp * gradient_penalty
+            gradient_penalty = self.compute_gradient_penalty(features, labels, generated_features)
+            # D_loss = -D_loss_real + D_loss_fake + self.lambda_gp * gradient_penalty
+            D_loss = -(D_loss_real - D_loss_fake)
+            gradient_penalty *= self.lambda_gp
+            gradient_penalty.backward(retain_graph=True)
         else:
             D_loss = -D_loss_real + D_loss_fake
         D_loss.backward()
@@ -395,22 +358,22 @@ class CWGANExperiment(BaseExperiment):
         # clip weights
         if not self.use_gradient_penalty:
             for p in self.D.parameters():
-                p.data.clamp_(-0.01, 0.01)
+                p.data.clamp_(-self.clip_val, self.clip_val)
         return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item()}
 
     def compute_gradient_penalty(self, features, labels, generated_features):
-        alpha = torch.FloatTensor(np.random.random((features.size(0), 1))).to(self.device)
-        interpolates = (alpha * features.float() + ((1 - alpha) * generated_features)).requires_grad_(True)
-        d_interpolates = self.D(interpolates, labels)
-        fake = torch.FloatTensor(features.shape[0], 1).fill_(1.0).requires_grad_(False).to(self.device)
+        alpha = torch.rand(features.size(0), 1, device=self.device)
+        interpolates = alpha * features + ((1 - alpha) * generated_features)
+        disc_interpolates = self.D(interpolates.float(), labels)
         gradients = torch.autograd.grad(
-            outputs=d_interpolates,
+            outputs=disc_interpolates,
             inputs=interpolates,
-            grad_outputs=fake,
+            grad_outputs=torch.ones(disc_interpolates.size(), device=self.device),
             create_graph=True,
             retain_graph=True,
-            only_inputs=True,
+            only_inputs=True
         )[0]
-        gradients = gradients.view(gradients.size(0), -1)
-        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
-        return gradient_penalty.to(self.device)
+        gradient_penalty = ((
+            gradients.view(-1, features.size(1)).norm(2, dim=1) - 1
+        ) ** 2).mean()
+        return gradient_penalty

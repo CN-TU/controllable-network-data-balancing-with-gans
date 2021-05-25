@@ -88,6 +88,17 @@ def run_significance_tests(real_features, real_labels, generated_features, gener
 
 def compute_euclidean_distance_by_class(class_means, generated_features, generated_labels,
                                         column_names, class_names, num_labels=14):
+    """
+    Args:
+        class_means: Numpy array.
+        generated_features: Numpy array.
+        generated_labels: Numpy array.
+        column_names: List.
+        class_names: List.
+        num_labels: Int.
+
+    Returns: A dictionary containing the mean distance across all columns for each label.
+    """
     flows = pd.DataFrame(np.append(generated_features, generated_labels.reshape(-1, 1), axis=1),
                          columns=column_names)
     distances = []
@@ -102,7 +113,7 @@ def compute_euclidean_distance_by_class(class_means, generated_features, generat
     return distances.mean(axis=1).to_dict()
 
 
-class CustomLogger:
+class Logger:
 
     def __init__(self, summary_writer):
         self.summary_writer = summary_writer
