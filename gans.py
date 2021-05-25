@@ -13,7 +13,6 @@ from tensorboardX import SummaryWriter
 from sklearn.metrics import classification_report
 
 import utils
-from utils import Logger
 
 
 class BaseGAN:
@@ -51,7 +50,7 @@ class BaseGAN:
             Path(self.log_dir).mkdir(parents=True, exist_ok=True)
             self.summary_writer = SummaryWriter(self.log_dir)
             print("Writing logs to: ", self.log_dir)
-            self.logger = Logger(self.summary_writer)
+            self.logger = utils.Logger(self.summary_writer)
 
     def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, G_train_freq=1, label_weights=None):
         """
@@ -76,7 +75,7 @@ class BaseGAN:
                 stats = self._train_epoch(features, labels, step, G_train_freq, label_weights)
 
                 # logging
-                running_stats = {k: v + stats[k] for k, v in running_stats.items()}
+                running_stats = {k: v + stats[k] for k, v in running_stats.items() if k in stats}
                 if step % log_freq == 0:
                     self.logger.log_to_commandline(stats, epoch, step, total_steps)
 
@@ -321,12 +320,12 @@ class CWGAN(BaseGAN):
         D_stats = self.fit_discriminator(features, labels, generated_features, noise_labels)
 
         # train generator
+        G_stats = dict()
         if step % G_train_freq == 0:
             noise, noise_labels = self.make_noise(batch_size, label_weights)
             generated_features, noise_labels, G_stats = self.fit_generator(noise, noise_labels)
             # generated_features, noise_labels, G_stats = self.fit_generator(generated_features, noise_labels)
 
-        # logging
         return {**G_stats, **D_stats}
 
     def fit_generator(self, noise, noise_labels):
@@ -341,8 +340,9 @@ class CWGAN(BaseGAN):
         self.D_optimizer.zero_grad()
         validity_real = self.D(features.float(), labels)
         validity_fake = self.D(generated_features if self.use_gradient_penalty else generated_features.detach(),
-                               noise_labels)
+                               noise_labels if self.use_gradient_penalty else noise_labels.detach())
         # validity_fake = self.D(generated_features, noise_labels)
+
         D_loss_real = torch.mean(validity_real)
         D_loss_fake = torch.mean(validity_fake)
         if self.use_gradient_penalty:
