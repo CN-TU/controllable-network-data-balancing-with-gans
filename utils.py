@@ -47,13 +47,15 @@ def make_confusion_matrix(y_true, y_pred):
 
 
 def run_significance_tests(real_features, real_labels, generated_features, generated_labels,
-                           column_names, class_names, num_labels=14):
+                           column_names, class_names, num_labels=14, alpha=0.05, test="ks"):
     """
-    Conducts the Kolmogorov-Smirnov for between each real and generated feature column per class,
+    Conducts a significance test between each real and generated feature column per class,
     assuming a significance level of 5%.
     The siginificance test determines if the distributions of the given real and generated column are different.
     The GAN should be able to generate "realistic" attacks. Therefore, it is successful if the significance test
     does not detect a difference in the distributions.
+
+    Available tests are the Kolmogorov-Smirnov, the two sample ttest, and the two-sample wilcoxon ranksum test.
 
     Args:
         real_features: Numpy array.
@@ -63,10 +65,13 @@ def run_significance_tests(real_features, real_labels, generated_features, gener
         column_names: List.
         class_names: List.
         num_labels: Int.
+        test: Str. The test to conduct. One of ["ks", "ttest", "ranksums"].
 
     Returns: A dictionary containing the number of "real" feature columns for each label.
 
     """
+    if test not in ["ks", "ttest", "ranksums"]:
+        raise ValueError("Valid tests are 'ks', 'ttest', 'ranksums'")
     stats = []
     for label in range(num_labels):
         real_by_class = real_features[np.where(real_labels == label)]
@@ -77,9 +82,13 @@ def run_significance_tests(real_features, real_labels, generated_features, gener
             if real_feature.size == 0 or generated_feature.size == 0:
                 is_different.append(None)
             else:
-                ks_test = scipy.stats.ks_2samp(real_feature, generated_feature)
-                is_different.append(ks_test[1] < 0.05)
-
+                if test == "ks":
+                    res = scipy.stats.ks_2samp(real_feature, generated_feature)
+                elif test == "ttest":
+                    res = scipy.stats.ttest_ind(real_feature, generated_feature)
+                elif test == "ranksums":
+                    res = scipy.stats.ranksums(real_feature, generated_feature)
+                is_different.append(res[1] < alpha)
         stats.append(is_different)
 
     df_is_different = pd.DataFrame(stats, columns=column_names[:-1], index=class_names[:-1])
@@ -149,11 +158,11 @@ class Logger:
 if __name__ == "__main__":
     import torch
     from networks import Generator, Discriminator
-    from experiment import CGANExperiment
+    from gans import CGAN
 
     # make model
     G, D = Generator(79, 14), Discriminator(79, 14)
-    exp = CGANExperiment(G, D, None, None)
+    exp = CGAN(G, D, None, None)
     exp.load_model("./models/cgan/04-05-2021_14h52m/model-150.pt", load_optimizer=False)
     label_distribution = {0: 0.01, 1: 0.23, 2: 0.02, 3: 0.38, 4: 0.01, 5: 0.01, 6: 0.015,
                           7: 0.01, 8: 0.01, 9: 0.265, 10: 0.01, 11: 0.01, 12: 0.01, 13: 0.01}
