@@ -3,19 +3,10 @@ Notes:
     1. class distribution in batches:
         - now proportional to the actual class distribution
     2. Evaluation, how do we assess quality of the generated flows?
-        - we cannot feed flows into SNORT --> therefore we use external ML model to classify
+        - we cannot feed flows into SNORT --> therefore we use external ML model to classify (random forest)
         - visual inspection of feature distributions in TensorBoard, similar to: https://www.youtube.com/watch?v=ZFmnchOJseM
-
-TODO:
-    2. Evaluation, how do we assess quality of the generated flows?
-        - implement ML model (e.g., SVM, Random forest) for evaluation
-            - classify only True/False or rather class-based?
-            - since, we are generating flows conditioned on the class, class-based would be better
-        - class distributions
-            - compute mean/std for each feature by class in train
-            - generate n-samples for each class & compute mean/std
-            - compare generated distributions against actual distributions, based on distance (e.g., Euclidean)
-
+        - euclidean distances between mean real flows per class and generated ones
+        - statistical tests
 """
 import json
 import argparse
