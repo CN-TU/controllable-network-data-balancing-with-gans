@@ -92,7 +92,7 @@ class BaseGAN:
     def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None):
         raise NotImplementedError()
 
-    def evaluate(self, test_loader, col_to_idx, cols_to_plot, step,
+    def evaluate(self, dataset, cols_to_plot, step,
                  num_samples=1024, label_weights=None, classifier=None,
                  scaler=None, label_encoder=None, class_means=None,
                  run_significance_tests=False, compute_euclidean_distances=False):
@@ -104,7 +104,7 @@ class BaseGAN:
             - Plots are written to TensorBoard.
 
         Args:
-            test_loader: PyTorch Dataset. Contains the actual flows, i.e.,
+            dataset: PyTorch Dataset. Contains the actual flows, i.e.,
                 the real feature distributions to compare against
             col_to_idx: Dict. Map column names to index.
             cols_to_plot: List. Names of feature columns to plot.
@@ -120,13 +120,16 @@ class BaseGAN:
             compute_euclidean_distances: Bool. Indicates whether euclidean distances between generated features and mean
                     flow of entire dataset should be computed per class.
         """
+        self.set_mode("eval")
+        col_to_idx = {col: i for i, col in enumerate(dataset.column_names)}
+
         generated_features, labels = self.generate(num_samples, label_weights)
         generated_features = generated_features.cpu()
         labels = labels.cpu()
 
         for col in cols_to_plot:
             idx = col_to_idx[col]
-            real = test_loader.X[:, idx]
+            real = dataset.X[:, idx]
             fake = generated_features[:, idx]
             dist_plot = utils.make_distplot(real, fake.cpu(), col)
             self.summary_writer.add_image("Distributions/" + col, dist_plot, step)
@@ -152,7 +155,7 @@ class BaseGAN:
 
         if run_significance_tests:
             n_real_features_by_class = utils.run_significance_tests(
-                test_loader.X, test_loader.y,
+                dataset.X, dataset.y,
                 generated_features, labels,
                 list(col_to_idx.keys()),
                 label_encoder.classes_
@@ -183,6 +186,7 @@ class BaseGAN:
         Returns: torch.Tensor of generated samples, torch.Tensor of generated labels
 
         """
+        self.set_mode("eval")
         with torch.no_grad():
             noise, labels = self.make_noise(num_samples, label_weights)
             generated_features = self.G(noise, labels)
@@ -226,6 +230,17 @@ class BaseGAN:
                         state[k] = v.to(self.device)
             print("Loaded D state_dict.")
 
+    def set_mode(self, mode="train"):
+        for key in dir(self):
+            module = getattr(self, key)
+            if isinstance(module, torch.nn.Module):
+                if mode == "train":
+                    module.train()
+                elif mode == "eval":
+                    module.eval()
+                else:
+                    raise ValueError("Invalid mode; allowed are ['train', 'eval'].")
+
 
 class CGAN(BaseGAN):
 
@@ -256,6 +271,7 @@ class CGAN(BaseGAN):
         Returns: a dictionary, stats
 
         """
+        self.set_mode("train")
         batch_size = features.shape[0]
         real = torch.FloatTensor(batch_size, 1).fill_(1.0).to(self.device)
         fake = torch.FloatTensor(batch_size, 1).fill_(0.0).to(self.device)
@@ -312,6 +328,7 @@ class CWGAN(BaseGAN):
         self.lambda_gp = 10
 
     def _train_epoch(self, features, labels, step, G_train_freq=5, label_weights=None):
+        self.set_mode("train")
         batch_size = features.shape[0]
         noise, noise_labels = self.make_noise(batch_size, label_weights)
         generated_features = self.G(noise, noise_labels)

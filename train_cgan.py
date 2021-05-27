@@ -61,7 +61,6 @@ if __name__ == '__main__':
     classifier = joblib.load(args.classifier_path)
     cols_to_plot = ["Source Port", "Destination Port", "Flow Duration", "Flow Packets/s", "Fwd Packets/s",
                     "Bwd Packets/s", "Packet Length Mean", "Average Packet Size", "Idle Mean"]
-    col_to_idx = {col: i for i, col in enumerate(train_dataset.column_names)}
     label_distribution = {0: 0.01, 1: 0.23, 2: 0.02, 3: 0.38, 4: 0.01, 5: 0.01, 6: 0.015,
                           7: 0.01, 8: 0.01, 9: 0.265, 10: 0.01, 11: 0.01, 12: 0.01, 13: 0.01}
     label_weights = list(label_distribution.values())
@@ -80,12 +79,12 @@ if __name__ == '__main__':
         D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr)
 
     if args.use_wgan:
-        exp = CWGAN(G, D, G_optimizer, D_optimizer, criterion=None, use_gradient_penalty=args.use_gp,
+        gan = CWGAN(G, D, G_optimizer, D_optimizer, criterion=None, use_gradient_penalty=args.use_gp,
                     model_save_dir=model_save_dir, log_dir=log_dir, clip_val=args.clip_val)
     else:
         # criterion = torch.nn.MSELoss()
         criterion = torch.nn.BCEWithLogitsLoss()
-        exp = CGAN(G, D, G_optimizer, D_optimizer, criterion, model_save_dir=model_save_dir, log_dir=log_dir)
+        gan = CGAN(G, D, G_optimizer, D_optimizer, criterion, model_save_dir=model_save_dir, log_dir=log_dir)
 
     print("Generator:\n", G)
     print("Discriminator:\n", D)
@@ -95,25 +94,25 @@ if __name__ == '__main__':
     print("Saving config params to ", log_dir)
     all_params = {"args": vars(args), "log_dir": log_dir, "model_save_dir": model_save_dir,
                   "G": str(G), "D": str(D), "G_optimizer": str(G), "D_optimizer": str(D)}
-    with open(exp.log_dir / "all_params.json", "w") as f:
+    with open(gan.log_dir / "all_params.json", "w") as f:
         json.dump(all_params, f)
 
     print("Starting train loop...")
     for epoch in range(args.n_epochs):
 
         if epoch % args.eval_freq == 0:
-            exp.evaluate(test_dataset, col_to_idx, cols_to_plot, epoch,
+            gan.evaluate(test_dataset, cols_to_plot, epoch,
                          label_weights=label_weights, classifier=classifier, label_encoder=test_dataset.label_encoder,
                          scaler=test_dataset.scaler, class_means=test_dataset.class_means,
                          run_significance_tests=args.run_significance_tests,
                          compute_euclidean_distances=args.compute_euclidean_distances)
 
-        exp.train_epoch(train_loader, epoch, log_freq=args.log_freq,
+        gan.train_epoch(train_loader, epoch, log_freq=args.log_freq,
                         log_tensorboard_freq=args.log_tensorboard_freq,
                         label_weights=label_weights if args.use_label_weights else None,
                         G_train_freq=args.G_train_freq)
 
         if epoch % args.save_freq == 0:
-            exp.save_model(epoch)
+            gan.save_model(epoch)
 
-    exp.logger.add_all_custom_scalars()
+    gan.logger.add_all_custom_scalars()
