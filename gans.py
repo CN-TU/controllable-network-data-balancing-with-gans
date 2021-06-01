@@ -17,7 +17,7 @@ import utils
 
 class BaseGAN:
 
-    def __init__(self, G, D, G_optimizer, D_optimizer, criterion=None, model_save_dir=None, log_dir=None, device=None):
+    def __init__(self, G, D, G_optimizer, D_optimizer, model_save_dir=None, log_dir=None, device=None):
         """
 
         Args:
@@ -25,14 +25,12 @@ class BaseGAN:
             D: torch.nn.Module. The discriminator part of the GAN.
             G_optimizer: torch Optimizer. Generator optimizer.
             D_optimizer: torch Optimizer. Discriminator optimizer.
-            criterion: torch criterion. Loss function to optimizer for.
             model_save_dir: String. Directory path to save trained model to.
             log_dir: String. Directory path to log TensorBoard logs to.
             device: torch.device. Either cpu or gpu device.
         """
         self.G, self.D = G, D
         self.G_optimizer, self.D_optimizer = G_optimizer, D_optimizer
-        self.criterion = criterion
         self.latent_dim, self.num_labels = self.G.latent_dim, self.G.num_labels
         self.device = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu") \
             if not device else device
@@ -246,7 +244,10 @@ class CGAN(BaseGAN):
 
     def __init__(self, G, D, G_optimizer, D_optimizer, criterion=None, model_save_dir=None, log_dir=None, device=None):
         """
-        Implement the conditional GAN architecture.
+        Implements the conditional GAN (cGAN) architecture.
+        Paper:
+            https://arxiv.org/pdf/1411.1784.pdf
+
 
         Args:
             G: torch.nn.Module. The generator part of the GAN.
@@ -258,7 +259,8 @@ class CGAN(BaseGAN):
             log_dir: String. Directory path to log TensorBoard logs to.
             device: torch.device. Either cpu or gpu device.
         """
-        super().__init__(G, D, G_optimizer, D_optimizer, criterion, model_save_dir, log_dir, device)
+        super().__init__(G, D, G_optimizer, D_optimizer, model_save_dir, log_dir, device)
+        self.criterion = criterion.to(self.device)
 
     def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None):
         """
@@ -307,25 +309,29 @@ class CGAN(BaseGAN):
 
 class CWGAN(BaseGAN):
 
-    def __init__(self, G, D, G_optimizer, D_optimizer, clip_val=0.1, use_gradient_penalty=False,
-                 criterion=None, model_save_dir=None, log_dir=None, device=None):
+    def __init__(self, G, D, G_optimizer, D_optimizer, clip_val=0.1, lambda_gp=10, cross_entropy_weight=0.1,
+                 use_gradient_penalty=False, model_save_dir=None, log_dir=None, device=None):
         """
-        Implement the conditional Wasserstein-GAN architecture.
+        Implement the conditional Wasserstein-GAN (WGAN) and WGAN with gradien penalty.
+        Papers:
+            https://arxiv.org/pdf/1701.07875.pdf
+            https://arxiv.org/pdf/1704.00028.pdf
 
         Args:
             G: torch.nn.Module. The generator part of the GAN.
             D: torch.nn.Module. The discriminator part of the GAN.
             G_optimizer: torch Optimizer. Generator optimizer.
             D_optimizer: torch Optimizer. Discriminator optimizer.
-            criterion: torch criterion. Loss function to optimizer for.
             model_save_dir: String. Directory path to save trained model to.
             log_dir: String. Directory path to log TensorBoard logs to.
             device: torch.device. Either cpu or gpu device.
         """
-        super().__init__(G, D, G_optimizer, D_optimizer, criterion, model_save_dir, log_dir, device)
+        super().__init__(G, D, G_optimizer, D_optimizer, model_save_dir, log_dir, device)
         self.use_gradient_penalty = use_gradient_penalty
         self.clip_val = clip_val
-        self.lambda_gp = 10
+        self.lambda_gp = lambda_gp
+        self.cross_entropy_weight = cross_entropy_weight
+        self.criterion = torch.nn.CrossEntropyLoss().to(self.device)
 
     def _train_epoch(self, features, labels, step, G_train_freq=5, label_weights=None):
         self.set_mode("train")
@@ -348,20 +354,65 @@ class CWGAN(BaseGAN):
     def fit_generator(self, noise, noise_labels):
         self.G_optimizer.zero_grad()
         generated_features = self.G(noise, noise_labels)
-        G_loss = -torch.mean(self.D(generated_features, noise_labels))
+        validity, _ = self.D(generated_features, noise_labels)
+        G_loss = -torch.mean(validity)
         G_loss.backward()
         self.G_optimizer.step()
         return generated_features, noise_labels, {"G_loss": G_loss.item()}
 
+    # def fit_generator(self, noise, noise_labels):
+    #     self.G_optimizer.zero_grad()
+    #     generated_features = self.G(noise, noise_labels)
+    #     validity, class_preds = self.D(generated_features, noise_labels)
+    #     G_loss = -torch.mean(validity)
+    #     G_loss_cross_entropy = -self.criterion(class_preds, noise_labels)
+    #     G_loss_total = G_loss + self.cross_entropy_weight * G_loss_cross_entropy
+    #     G_loss_total.backward()
+    #     self.G_optimizer.step()
+    #     metrics = {"G_loss": G_loss.item(),
+    #                "G_loss_cross_entropy": G_loss_cross_entropy.item(),
+    #                "G_loss_total": G_loss_total.item()}
+    #     return generated_features, noise_labels, metrics
+
+    # def fit_discriminator(self, features, labels, generated_features, noise_labels):
+    #     self.D_optimizer.zero_grad()
+    #     validity_real = self.D(features.float(), labels)
+    #     validity_fake = self.D(generated_features if self.use_gradient_penalty else generated_features.detach(),
+    #                            noise_labels if self.use_gradient_penalty else noise_labels.detach())
+    #     # validity_fake = self.D(generated_features, noise_labels)
+    #
+    #     D_loss_real = torch.mean(validity_real)
+    #     D_loss_fake = torch.mean(validity_fake)
+    #     if self.use_gradient_penalty:
+    #         gradient_penalty = self.compute_gradient_penalty(features, labels, generated_features)
+    #         # D_loss = -D_loss_real + D_loss_fake + self.lambda_gp * gradient_penalty
+    #         D_loss = -(D_loss_real - D_loss_fake)
+    #         gradient_penalty *= self.lambda_gp
+    #         gradient_penalty.backward(retain_graph=True)
+    #     else:
+    #         D_loss = -D_loss_real + D_loss_fake
+    #     D_loss.backward()
+    #     self.D_optimizer.step()
+    #     # clip weights
+    #     if not self.use_gradient_penalty:
+    #         for p in self.D.parameters():
+    #             p.data.clamp_(-self.clip_val, self.clip_val)
+    #     return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item()}
+
     def fit_discriminator(self, features, labels, generated_features, noise_labels):
         self.D_optimizer.zero_grad()
-        validity_real = self.D(features.float(), labels)
-        validity_fake = self.D(generated_features if self.use_gradient_penalty else generated_features.detach(),
-                               noise_labels if self.use_gradient_penalty else noise_labels.detach())
-        # validity_fake = self.D(generated_features, noise_labels)
-
+        validity_real, class_preds_real = self.D(features.float(), labels)
+        validity_fake, class_preds_fake = self.D(
+            generated_features if self.use_gradient_penalty else generated_features.detach(),
+            noise_labels if self.use_gradient_penalty else noise_labels.detach()
+        )
         D_loss_real = torch.mean(validity_real)
         D_loss_fake = torch.mean(validity_fake)
+        D_loss_cross_entropy_real = self.criterion(class_preds_real, labels)
+        D_loss_cross_entropy_fake = self.criterion(class_preds_fake, noise_labels)
+        D_loss_total_real = D_loss_real + self.cross_entropy_weight * D_loss_cross_entropy_real
+        D_loss_total_fake = D_loss_fake + self.cross_entropy_weight * D_loss_cross_entropy_fake
+
         if self.use_gradient_penalty:
             gradient_penalty = self.compute_gradient_penalty(features, labels, generated_features)
             # D_loss = -D_loss_real + D_loss_fake + self.lambda_gp * gradient_penalty
@@ -369,14 +420,17 @@ class CWGAN(BaseGAN):
             gradient_penalty *= self.lambda_gp
             gradient_penalty.backward(retain_graph=True)
         else:
-            D_loss = -D_loss_real + D_loss_fake
+            D_loss = -D_loss_total_real + D_loss_total_fake
         D_loss.backward()
         self.D_optimizer.step()
         # clip weights
         if not self.use_gradient_penalty:
             for p in self.D.parameters():
                 p.data.clamp_(-self.clip_val, self.clip_val)
-        return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item()}
+        return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item(),
+                "D_loss_cross_entropy_real": D_loss_cross_entropy_real.item(),
+                "D_loss_cross_entropy_fake": D_loss_cross_entropy_fake.item(),
+                "D_loss_total_real": D_loss_total_real.item(), "D_loss_total_fake": D_loss_total_fake.item()}
 
     def compute_gradient_penalty(self, features, labels, generated_features):
         alpha = torch.rand(features.size(0), 1, device=self.device)
@@ -394,3 +448,79 @@ class CWGAN(BaseGAN):
             gradients.view(-1, features.size(1)).norm(2, dim=1) - 1
         ) ** 2).mean()
         return gradient_penalty
+
+
+# TODO: test ACGAN
+
+class ACGAN(BaseGAN):
+
+    def __init__(self, G, D, G_optimizer, D_optimizer,
+                 model_save_dir=None, log_dir=None, device=None):
+        """
+        Implements the Auxiliary classifier GAN (AC-GAN)
+        Paper:
+            https://arxiv.org/pdf/1610.09585.pdf
+
+        Args:
+            G: torch.nn.Module. The generator part of the GAN.
+            D: torch.nn.Module. The discriminator part of the GAN.
+            G_optimizer: torch Optimizer. Generator optimizer.
+            D_optimizer: torch Optimizer. Discriminator optimizer.
+            criterion: torch criterion. Loss function to optimizer for.
+            model_save_dir: String. Directory path to save trained model to.
+            log_dir: String. Directory path to log TensorBoard logs to.
+            device: torch.device. Either cpu or gpu device.
+        """
+        super().__init__(G, D, G_optimizer, D_optimizer, model_save_dir, log_dir, device)
+        self.adversarial_loss = torch.nn.BCEWithLogitsLoss().to(self.device)
+        self.auxiliary_loss = torch.nn.CrossEntropyLoss().to(self.device)
+
+    def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None):
+        self.set_mode("train")
+        batch_size = features.shape[0]
+        real = torch.FloatTensor(batch_size, 1).fill_(1.0).to(self.device)
+        fake = torch.FloatTensor(batch_size, 1).fill_(0.0).to(self.device)
+
+        # train generator
+        generated_features, noise_labels, G_stats = self.fit_generator(batch_size, real, label_weights=label_weights)
+        # train discriminator
+        D_stats = self.fit_discriminator(features, labels, generated_features,
+                                         noise_labels, real, fake)
+        return {**G_stats, **D_stats}
+
+    def fit_generator(self, batch_size, real, label_weights=None):
+        self.G_optimizer.zero_grad()
+        noise, noise_labels = self.make_noise(batch_size, label_weights)
+        generated_features = self.G(noise, noise_labels)
+        validity, class_preds = self.D(generated_features)
+        G_adv_loss = self.adversarial_loss(validity, real)
+        G_aux_loss = self.auxiliary_loss(class_preds, noise_labels)
+        G_loss = 0.5 * (G_adv_loss + G_aux_loss)
+        G_loss.backward()
+        self.G_optimizer.step()
+        metrics = {"G_loss": G_loss.item(), "G_adv_loss": G_adv_loss.item(), "G_aux_loss": G_aux_loss.item()}
+        return generated_features, noise_labels, metrics
+
+    def fit_discriminator(self, features, labels, generated_features,
+                          noise_labels, real, fake):
+        self.D_optimizer.zero_grad()
+        validity_real, class_preds_real = self.D(features.float())
+        validity_fake, class_preds_fake = self.D(generated_features.detach())
+
+        D_loss_real = (self.adversarial_loss(validity_real, real) + self.auxiliary_loss(class_preds_real, labels)) / 2
+        D_loss_fake = (self.adversarial_loss(validity_fake, fake) + self.auxiliary_loss(class_preds_fake, noise_labels)) / 2
+
+        D_loss = (D_loss_real + D_loss_fake) / 2
+
+        # Calculate discriminator accuracy
+        pred = np.concatenate([class_preds_real.data.cpu().numpy(), class_preds_fake.data.cpu().numpy()], axis=0)
+        gt = np.concatenate([labels.data.cpu().numpy(), noise_labels.data.cpu().numpy()], axis=0)
+        D_acc = np.mean(np.argmax(pred, axis=1) == gt)
+
+        D_loss.backward()
+        self.D_optimizer.step()
+
+        return {"D_loss": D_loss.item(),
+                "D_loss_real": D_loss_real.item(),
+                "D_loss_fake": D_loss_fake.item(),
+                "D_acc": D_acc}

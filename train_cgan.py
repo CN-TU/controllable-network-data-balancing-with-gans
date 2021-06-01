@@ -14,7 +14,7 @@ import joblib
 import torch
 from torch.utils import data
 
-from gans import CGAN, CWGAN
+from gans import CGAN, CWGAN, ACGAN
 from networks import Generator, Discriminator
 from cic_ids_17_dataset import CIC17Dataset
 
@@ -37,6 +37,7 @@ if __name__ == '__main__':
     parser.add_argument("--save_freq", type=int, default=1, help="Save model every n epochs.")
     parser.add_argument("--use_wgan", action="store_true", help="Indicates if the WGAN architecture should be used.")
     parser.add_argument("--use_gp", action="store_true", help="Indicates if gradient should be used in WGAN.")
+    parser.add_argument("--use_acgan", action="store_true", help="Indicates if gradient should be used in WGAN.")
     parser.add_argument("--use_label_weights", action="store_true",
                         help="Indicates if label weights should be used in generation procedure.")
     parser.add_argument("--run_significance_tests", action="store_true")
@@ -48,8 +49,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(f"Args: {args}")
 
-    log_dir = args.log_dir + "/cwgan" if args.use_wgan else args.log_dir + "/cgan"
-    model_save_dir = args.model_save_dir + "/cwgan" if args.use_wgan else args.model_save_dir + "/cgan"
+    if args.use_wgan:
+        model_name = "cwgan"
+    elif args.use_acgan:
+        model_name = "acgan"
+    else:
+        model_name = "cgan"
+    log_dir = args.log_dir + "/" + model_name
+    model_save_dir = args.model_save_dir + "/" + model_name
     device = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu")
 
     print("Loading dataset...")
@@ -67,8 +74,9 @@ if __name__ == '__main__':
 
     print("Making GAN...")
     G = Generator(args.num_features, args.num_labels, latent_dim=args.latent_dim).to(device)
-    D = Discriminator(args.num_features, args.num_labels).to(device)
-    if args.use_gp:
+    D = Discriminator(args.num_features, args.num_labels,
+                      use_label_condition=not args.use_acgan, use_class_head=args.use_acgan).to(device)
+    if args.use_gp or args.use_acgan:
         G_optimizer = torch.optim.Adam(G.parameters(), lr=args.lr, betas=(0.5, 0.999))
         D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr, betas=(0.5, 0.999))
     elif args.use_wgan:
@@ -79,8 +87,10 @@ if __name__ == '__main__':
         D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr)
 
     if args.use_wgan:
-        gan = CWGAN(G, D, G_optimizer, D_optimizer, criterion=None, use_gradient_penalty=args.use_gp,
+        gan = CWGAN(G, D, G_optimizer, D_optimizer, use_gradient_penalty=args.use_gp,
                     model_save_dir=model_save_dir, log_dir=log_dir, clip_val=args.clip_val)
+    elif args.use_acgan:
+        gan = ACGAN(G, D, G_optimizer, D_optimizer, model_save_dir=model_save_dir, log_dir=log_dir)
     else:
         # criterion = torch.nn.MSELoss()
         criterion = torch.nn.BCEWithLogitsLoss()
@@ -95,7 +105,7 @@ if __name__ == '__main__':
     all_params = {"args": vars(args), "log_dir": log_dir, "model_save_dir": model_save_dir,
                   "G": str(G), "D": str(D), "G_optimizer": str(G), "D_optimizer": str(D)}
     with open(gan.log_dir / "all_params.json", "w") as f:
-        json.dump(all_params, f)
+        json.dump(all_params, f, indent=4, sort_keys=True)
 
     print("Starting train loop...")
     for epoch in range(args.n_epochs):
