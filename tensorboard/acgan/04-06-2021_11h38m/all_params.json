@@ -1,0 +1,33 @@
+{
+    "D": "Discriminator(\n  (net): Sequential(\n    (0): Linear(in_features=79, out_features=256, bias=True)\n    (1): LeakyReLU(negative_slope=0.2, inplace=True)\n    (2): Linear(in_features=256, out_features=256, bias=True)\n    (3): LeakyReLU(negative_slope=0.2, inplace=True)\n  )\n  (output_head): Linear(in_features=256, out_features=1, bias=True)\n  (class_head): Linear(in_features=256, out_features=14, bias=True)\n)",
+    "D_optimizer": "Discriminator(\n  (net): Sequential(\n    (0): Linear(in_features=79, out_features=256, bias=True)\n    (1): LeakyReLU(negative_slope=0.2, inplace=True)\n    (2): Linear(in_features=256, out_features=256, bias=True)\n    (3): LeakyReLU(negative_slope=0.2, inplace=True)\n  )\n  (output_head): Linear(in_features=256, out_features=1, bias=True)\n  (class_head): Linear(in_features=256, out_features=14, bias=True)\n)",
+    "G": "Generator(\n  (label_embedding): Embedding(14, 14)\n  (model): Sequential(\n    (0): Linear(in_features=142, out_features=256, bias=True)\n    (1): LeakyReLU(negative_slope=0.2, inplace=True)\n    (2): Linear(in_features=256, out_features=256, bias=True)\n    (3): BatchNorm1d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)\n    (4): LeakyReLU(negative_slope=0.2, inplace=True)\n    (5): Linear(in_features=256, out_features=79, bias=True)\n    (6): Sigmoid()\n  )\n)",
+    "G_optimizer": "Generator(\n  (label_embedding): Embedding(14, 14)\n  (model): Sequential(\n    (0): Linear(in_features=142, out_features=256, bias=True)\n    (1): LeakyReLU(negative_slope=0.2, inplace=True)\n    (2): Linear(in_features=256, out_features=256, bias=True)\n    (3): BatchNorm1d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)\n    (4): LeakyReLU(negative_slope=0.2, inplace=True)\n    (5): Linear(in_features=256, out_features=79, bias=True)\n    (6): Sigmoid()\n  )\n)",
+    "args": {
+        "G_train_freq": 1,
+        "batch_size": 256,
+        "classifier_path": "./models/classifier/20-05-2021_12h01m/classifier.gz",
+        "clip_val": 0.1,
+        "compute_euclidean_distances": true,
+        "data_path": "./data/cic-ids-2017_splits/seed_0/",
+        "eval_freq": 1,
+        "latent_dim": 128,
+        "log_dir": "./tensorboard",
+        "log_freq": 2000,
+        "log_tensorboard_freq": 100,
+        "lr": 0.0002,
+        "model_save_dir": "./models",
+        "n_epochs": 150,
+        "num_cpu": -1,
+        "num_features": 79,
+        "num_labels": 14,
+        "save_freq": 50,
+        "significance_test": "ttest",
+        "use_acgan": true,
+        "use_gp": false,
+        "use_label_weights": false,
+        "use_wgan": false
+    },
+    "log_dir": "./tensorboard/acgan",
+    "model_save_dir": "./models/acgan"
+}
