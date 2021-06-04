@@ -93,7 +93,7 @@ class BaseGAN:
     def evaluate(self, dataset, cols_to_plot, step,
                  num_samples=1024, label_weights=None, classifier=None,
                  scaler=None, label_encoder=None, class_means=None,
-                 run_significance_tests=False, compute_euclidean_distances=False):
+                 significance_test=None, compute_euclidean_distances=False):
         """
         Evaluates the generated features:
             - Compares generated feature distributions with actual distributions of the given test set.
@@ -114,7 +114,7 @@ class BaseGAN:
                     trained on scaled flows. Therefore, we have to unscale them using the original scaler.
             label_encoder: sklearn model. Original label encoder used to create the dataset. Predicted numeric labels
                            can be transformed to clear-name labels.
-            run_significance_tests: Bool. Indicates whether significance test on feature columns should be run or not.
+            significance_test: Str or None. If given, indicates what significance test should be run.
             compute_euclidean_distances: Bool. Indicates whether euclidean distances between generated features and mean
                     flow of entire dataset should be computed per class.
         """
@@ -151,13 +151,16 @@ class BaseGAN:
             confusion_matrix = utils.make_confusion_matrix(labels_transformed, label_preds)
             self.summary_writer.add_image("classifier_confusion_matrix", confusion_matrix, step)
 
-        if run_significance_tests:
+        if significance_test:
             n_real_features_by_class = utils.run_significance_tests(
                 dataset.X, dataset.y,
                 generated_features, labels,
                 list(col_to_idx.keys()),
-                label_encoder.classes_
+                label_encoder.classes_,
+                test=significance_test
             )
+            n_real_features_mean = sum(n_real_features_by_class.values()) / len(n_real_features_by_class)
+            n_real_features_by_class["mean_n_real_features"] = n_real_features_mean
             n_real_features_by_class = {"N_real_features/" + k: v for k, v in n_real_features_by_class.items()}
             self.logger.log_to_tensorboard(n_real_features_by_class, step, 0, 1)
 
@@ -277,9 +280,7 @@ class CGAN(BaseGAN):
         batch_size = features.shape[0]
         real = torch.FloatTensor(batch_size, 1).fill_(1.0).to(self.device)
         fake = torch.FloatTensor(batch_size, 1).fill_(0.0).to(self.device)
-        # train generator
         generated_features, noise_labels, G_stats = self.fit_generator(batch_size, real, label_weights=label_weights)
-        # train discriminator
         D_stats = self.fit_discriminator(features, labels, generated_features,
                                          noise_labels, real, fake)
         return {**G_stats, **D_stats}
@@ -309,7 +310,7 @@ class CGAN(BaseGAN):
 
 class CWGAN(BaseGAN):
 
-    def __init__(self, G, D, G_optimizer, D_optimizer, clip_val=0.1, lambda_gp=10, cross_entropy_weight=0.1,
+    def __init__(self, G, D, G_optimizer, D_optimizer, clip_val=0.1, lambda_gp=10,
                  use_gradient_penalty=False, model_save_dir=None, log_dir=None, device=None):
         """
         Implement the conditional Wasserstein-GAN (WGAN) and WGAN with gradien penalty.
@@ -330,8 +331,7 @@ class CWGAN(BaseGAN):
         self.use_gradient_penalty = use_gradient_penalty
         self.clip_val = clip_val
         self.lambda_gp = lambda_gp
-        self.cross_entropy_weight = cross_entropy_weight
-        self.criterion = torch.nn.CrossEntropyLoss().to(self.device)
+        self.auxiliary_loss = torch.nn.CrossEntropyLoss().to(self.device)
 
     def _train_epoch(self, features, labels, step, G_train_freq=5, label_weights=None):
         self.set_mode("train")
@@ -354,65 +354,21 @@ class CWGAN(BaseGAN):
     def fit_generator(self, noise, noise_labels):
         self.G_optimizer.zero_grad()
         generated_features = self.G(noise, noise_labels)
-        validity, _ = self.D(generated_features, noise_labels)
+        validity = self.D(generated_features, noise_labels)
         G_loss = -torch.mean(validity)
         G_loss.backward()
         self.G_optimizer.step()
         return generated_features, noise_labels, {"G_loss": G_loss.item()}
 
-    # def fit_generator(self, noise, noise_labels):
-    #     self.G_optimizer.zero_grad()
-    #     generated_features = self.G(noise, noise_labels)
-    #     validity, class_preds = self.D(generated_features, noise_labels)
-    #     G_loss = -torch.mean(validity)
-    #     G_loss_cross_entropy = -self.criterion(class_preds, noise_labels)
-    #     G_loss_total = G_loss + self.cross_entropy_weight * G_loss_cross_entropy
-    #     G_loss_total.backward()
-    #     self.G_optimizer.step()
-    #     metrics = {"G_loss": G_loss.item(),
-    #                "G_loss_cross_entropy": G_loss_cross_entropy.item(),
-    #                "G_loss_total": G_loss_total.item()}
-    #     return generated_features, noise_labels, metrics
-
-    # def fit_discriminator(self, features, labels, generated_features, noise_labels):
-    #     self.D_optimizer.zero_grad()
-    #     validity_real = self.D(features.float(), labels)
-    #     validity_fake = self.D(generated_features if self.use_gradient_penalty else generated_features.detach(),
-    #                            noise_labels if self.use_gradient_penalty else noise_labels.detach())
-    #     # validity_fake = self.D(generated_features, noise_labels)
-    #
-    #     D_loss_real = torch.mean(validity_real)
-    #     D_loss_fake = torch.mean(validity_fake)
-    #     if self.use_gradient_penalty:
-    #         gradient_penalty = self.compute_gradient_penalty(features, labels, generated_features)
-    #         # D_loss = -D_loss_real + D_loss_fake + self.lambda_gp * gradient_penalty
-    #         D_loss = -(D_loss_real - D_loss_fake)
-    #         gradient_penalty *= self.lambda_gp
-    #         gradient_penalty.backward(retain_graph=True)
-    #     else:
-    #         D_loss = -D_loss_real + D_loss_fake
-    #     D_loss.backward()
-    #     self.D_optimizer.step()
-    #     # clip weights
-    #     if not self.use_gradient_penalty:
-    #         for p in self.D.parameters():
-    #             p.data.clamp_(-self.clip_val, self.clip_val)
-    #     return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item()}
-
     def fit_discriminator(self, features, labels, generated_features, noise_labels):
         self.D_optimizer.zero_grad()
-        validity_real, class_preds_real = self.D(features.float(), labels)
-        validity_fake, class_preds_fake = self.D(
-            generated_features if self.use_gradient_penalty else generated_features.detach(),
-            noise_labels if self.use_gradient_penalty else noise_labels.detach()
-        )
+        validity_real = self.D(features.float(), labels)
+        validity_fake = self.D(generated_features if self.use_gradient_penalty else generated_features.detach(),
+                               noise_labels if self.use_gradient_penalty else noise_labels.detach())
+        # validity_fake = self.D(generated_features, noise_labels)
+
         D_loss_real = torch.mean(validity_real)
         D_loss_fake = torch.mean(validity_fake)
-        D_loss_cross_entropy_real = self.criterion(class_preds_real, labels)
-        D_loss_cross_entropy_fake = self.criterion(class_preds_fake, noise_labels)
-        D_loss_total_real = D_loss_real + self.cross_entropy_weight * D_loss_cross_entropy_real
-        D_loss_total_fake = D_loss_fake + self.cross_entropy_weight * D_loss_cross_entropy_fake
-
         if self.use_gradient_penalty:
             gradient_penalty = self.compute_gradient_penalty(features, labels, generated_features)
             # D_loss = -D_loss_real + D_loss_fake + self.lambda_gp * gradient_penalty
@@ -420,17 +376,60 @@ class CWGAN(BaseGAN):
             gradient_penalty *= self.lambda_gp
             gradient_penalty.backward(retain_graph=True)
         else:
-            D_loss = -D_loss_total_real + D_loss_total_fake
+            D_loss = -D_loss_real + D_loss_fake
         D_loss.backward()
         self.D_optimizer.step()
         # clip weights
         if not self.use_gradient_penalty:
             for p in self.D.parameters():
                 p.data.clamp_(-self.clip_val, self.clip_val)
-        return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item(),
-                "D_loss_cross_entropy_real": D_loss_cross_entropy_real.item(),
-                "D_loss_cross_entropy_fake": D_loss_cross_entropy_fake.item(),
-                "D_loss_total_real": D_loss_total_real.item(), "D_loss_total_fake": D_loss_total_fake.item()}
+        return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item()}
+
+    # def fit_generator(self, noise, noise_labels):
+    #     self.G_optimizer.zero_grad()
+    #     generated_features = self.G(noise, noise_labels)
+    #     validity, class_preds = self.D(generated_features)
+    #     G_loss_adv = -torch.mean(validity)
+    #     G_loss_aux = -self.auxiliary_loss(class_preds, noise_labels)
+    #     G_loss = (G_loss_adv + G_loss_aux) / 2
+    #     G_loss.backward()
+    #     self.G_optimizer.step()
+    #     metrics = {"G_loss": G_loss.item(),
+    #                "G_loss_adv": G_loss_adv.item(),
+    #                "G_loss_aux": G_loss_aux.item()}
+    #     return generated_features, noise_labels, metrics
+    #
+    # def fit_discriminator(self, features, labels, generated_features, noise_labels):
+    #     self.D_optimizer.zero_grad()
+    #     validity_real, class_preds_real = self.D(features.float())
+    #     validity_fake, class_preds_fake = self.D(
+    #         generated_features if self.use_gradient_penalty else generated_features.detach()
+    #     )
+    #     D_loss_real = (torch.mean(validity_real) + self.auxiliary_loss(class_preds_real, labels)) / 2
+    #     D_loss_fake = (torch.mean(validity_fake) + self.auxiliary_loss(class_preds_fake, noise_labels)) / 2
+    #
+    #     if self.use_gradient_penalty:
+    #         gradient_penalty = self.compute_gradient_penalty(features, generated_features)
+    #         # D_loss = -D_loss_real + D_loss_fake + self.lambda_gp * gradient_penalty
+    #         D_loss = -(D_loss_real - D_loss_fake)
+    #         gradient_penalty *= self.lambda_gp
+    #         gradient_penalty.backward(retain_graph=True)
+    #     else:
+    #         D_loss = -D_loss_real + D_loss_fake
+    #         # Calculate discriminator accuracy
+    #     D_loss.backward()
+    #     self.D_optimizer.step()
+    #     # clip weights
+    #     if not self.use_gradient_penalty:
+    #         for p in self.D.parameters():
+    #             p.data.clamp_(-self.clip_val, self.clip_val)
+    #
+    #     pred = np.concatenate([class_preds_real.data.cpu().numpy(), class_preds_fake.data.cpu().numpy()], axis=0)
+    #     gt = np.concatenate([labels.data.cpu().numpy(), noise_labels.data.cpu().numpy()], axis=0)
+    #     D_acc = np.mean(np.argmax(pred, axis=1) == gt)
+    #
+    #     return {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(),
+    #             "D_loss_fake": D_loss_fake.item(), "D_acc": D_acc}
 
     def compute_gradient_penalty(self, features, labels, generated_features):
         alpha = torch.rand(features.size(0), 1, device=self.device)
@@ -449,8 +448,6 @@ class CWGAN(BaseGAN):
         ) ** 2).mean()
         return gradient_penalty
 
-
-# TODO: test ACGAN
 
 class ACGAN(BaseGAN):
 
@@ -480,26 +477,24 @@ class ACGAN(BaseGAN):
         batch_size = features.shape[0]
         real = torch.FloatTensor(batch_size, 1).fill_(1.0).to(self.device)
         fake = torch.FloatTensor(batch_size, 1).fill_(0.0).to(self.device)
-
-        # train generator
-        generated_features, noise_labels, G_stats = self.fit_generator(batch_size, real, label_weights=label_weights)
-        # train discriminator
+        noise, noise_labels = self.make_noise(batch_size, label_weights)
+        generated_features, G_stats = self.fit_generator(noise, noise_labels, real)
         D_stats = self.fit_discriminator(features, labels, generated_features,
                                          noise_labels, real, fake)
         return {**G_stats, **D_stats}
 
-    def fit_generator(self, batch_size, real, label_weights=None):
+    def fit_generator(self, noise, noise_labels, real):
         self.G_optimizer.zero_grad()
-        noise, noise_labels = self.make_noise(batch_size, label_weights)
         generated_features = self.G(noise, noise_labels)
         validity, class_preds = self.D(generated_features)
-        G_adv_loss = self.adversarial_loss(validity, real)
-        G_aux_loss = self.auxiliary_loss(class_preds, noise_labels)
-        G_loss = 0.5 * (G_adv_loss + G_aux_loss)
+        G_loss_adv = self.adversarial_loss(validity, real)
+        G_loss_aux = self.auxiliary_loss(class_preds, noise_labels)
+        # G_loss = 0.5 * (G_loss_adv + G_loss_aux)
+        G_loss = G_loss_adv + G_loss_aux
         G_loss.backward()
         self.G_optimizer.step()
-        metrics = {"G_loss": G_loss.item(), "G_adv_loss": G_adv_loss.item(), "G_aux_loss": G_aux_loss.item()}
-        return generated_features, noise_labels, metrics
+        metrics = {"G_loss": G_loss.item(), "G_loss_adv": G_loss_adv.item(), "G_loss_aux": G_loss_aux.item()}
+        return generated_features, metrics
 
     def fit_discriminator(self, features, labels, generated_features,
                           noise_labels, real, fake):
@@ -507,14 +502,17 @@ class ACGAN(BaseGAN):
         validity_real, class_preds_real = self.D(features.float())
         validity_fake, class_preds_fake = self.D(generated_features.detach())
 
-        D_loss_real = (self.adversarial_loss(validity_real, real) + self.auxiliary_loss(class_preds_real, labels)) / 2
-        D_loss_fake = (self.adversarial_loss(validity_fake, fake) + self.auxiliary_loss(class_preds_fake, noise_labels)) / 2
+        # D_loss_real = (self.adversarial_loss(validity_real, real) + self.auxiliary_loss(class_preds_real, labels)) / 2
+        # D_loss_fake = (self.adversarial_loss(validity_fake, fake) + self.auxiliary_loss(class_preds_fake, noise_labels)) / 2
+        # D_loss = (D_loss_real + D_loss_fake) / 2
 
-        D_loss = (D_loss_real + D_loss_fake) / 2
+        D_loss_real = (self.adversarial_loss(validity_real, real) + self.auxiliary_loss(class_preds_real, labels))
+        D_loss_fake = (self.adversarial_loss(validity_fake, fake) + self.auxiliary_loss(class_preds_fake, noise_labels))
+        D_loss = (D_loss_real + D_loss_fake)
 
         # Calculate discriminator accuracy
-        pred = np.concatenate([class_preds_real.data.cpu().numpy(), class_preds_fake.data.cpu().numpy()], axis=0)
-        gt = np.concatenate([labels.data.cpu().numpy(), noise_labels.data.cpu().numpy()], axis=0)
+        pred = np.concatenate([class_preds_real.detach().cpu().numpy(), class_preds_fake.detach().cpu().numpy()], axis=0)
+        gt = np.concatenate([labels.detach().cpu().numpy(), noise_labels.detach().cpu().numpy()], axis=0)
         D_acc = np.mean(np.argmax(pred, axis=1) == gt)
 
         D_loss.backward()

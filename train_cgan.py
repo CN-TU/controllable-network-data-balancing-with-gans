@@ -16,6 +16,7 @@ from torch.utils import data
 
 from gans import CGAN, CWGAN, ACGAN
 from networks import Generator, Discriminator
+# from networks import GeneratorBig as Generator, DiscriminatorBig as Discriminator
 from cic_ids_17_dataset import CIC17Dataset
 
 
@@ -37,11 +38,11 @@ if __name__ == '__main__':
     parser.add_argument("--save_freq", type=int, default=1, help="Save model every n epochs.")
     parser.add_argument("--use_wgan", action="store_true", help="Indicates if the WGAN architecture should be used.")
     parser.add_argument("--use_gp", action="store_true", help="Indicates if gradient should be used in WGAN.")
-    parser.add_argument("--use_acgan", action="store_true", help="Indicates if gradient should be used in WGAN.")
+    parser.add_argument("--use_acgan", action="store_true", help="Indicates ACGAN should be used.")
     parser.add_argument("--use_label_weights", action="store_true",
                         help="Indicates if label weights should be used in generation procedure.")
-    parser.add_argument("--run_significance_tests", action="store_true")
     parser.add_argument("--compute_euclidean_distances", action="store_true")
+    parser.add_argument("--significance_test", type=str)
     parser.add_argument("--log_dir", type=str, default="./tensorboard", help="TensorBoard log dir.")
     parser.add_argument("--model_save_dir", type=str, default="./models")
     parser.add_argument("--data_path", type=str, default="./data/cic-ids-2017_splits/seed_0/")
@@ -74,9 +75,11 @@ if __name__ == '__main__':
 
     print("Making GAN...")
     G = Generator(args.num_features, args.num_labels, latent_dim=args.latent_dim).to(device)
-    D = Discriminator(args.num_features, args.num_labels,
-                      use_label_condition=not args.use_acgan, use_class_head=args.use_acgan).to(device)
-    if args.use_gp or args.use_acgan:
+    D = Discriminator(args.num_features,
+                      args.num_labels,
+                      use_label_condition=not args.use_acgan,
+                      use_class_head=args.use_acgan).to(device)
+    if args.use_gp:
         G_optimizer = torch.optim.Adam(G.parameters(), lr=args.lr, betas=(0.5, 0.999))
         D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr, betas=(0.5, 0.999))
     elif args.use_wgan:
@@ -88,13 +91,15 @@ if __name__ == '__main__':
 
     if args.use_wgan:
         gan = CWGAN(G, D, G_optimizer, D_optimizer, use_gradient_penalty=args.use_gp,
-                    model_save_dir=model_save_dir, log_dir=log_dir, clip_val=args.clip_val)
+                    model_save_dir=model_save_dir, log_dir=log_dir, clip_val=args.clip_val,
+                    device=device)
     elif args.use_acgan:
-        gan = ACGAN(G, D, G_optimizer, D_optimizer, model_save_dir=model_save_dir, log_dir=log_dir)
+        gan = ACGAN(G, D, G_optimizer, D_optimizer, model_save_dir=model_save_dir, log_dir=log_dir, device=device)
     else:
         # criterion = torch.nn.MSELoss()
         criterion = torch.nn.BCEWithLogitsLoss()
-        gan = CGAN(G, D, G_optimizer, D_optimizer, criterion, model_save_dir=model_save_dir, log_dir=log_dir)
+        gan = CGAN(G, D, G_optimizer, D_optimizer, criterion,
+                   model_save_dir=model_save_dir, log_dir=log_dir, device=device)
 
     print("Generator:\n", G)
     print("Discriminator:\n", D)
@@ -114,7 +119,7 @@ if __name__ == '__main__':
             gan.evaluate(test_dataset, cols_to_plot, epoch,
                          label_weights=label_weights, classifier=classifier, label_encoder=test_dataset.label_encoder,
                          scaler=test_dataset.scaler, class_means=test_dataset.class_means,
-                         run_significance_tests=args.run_significance_tests,
+                         significance_test=args.significance_test,
                          compute_euclidean_distances=args.compute_euclidean_distances)
 
         gan.train_epoch(train_loader, epoch, log_freq=args.log_freq,
