@@ -227,8 +227,9 @@ class BaseGAN:
         # if self.custom_condition_vector:
         #     pass
         # else:
-        return torch.LongTensor(np.random.choice(np.arange(0, self.num_labels),
-                                                 num_samples, p=label_weights)).to(self.device)
+        labels = torch.LongTensor(np.random.choice(np.arange(0, self.num_labels),
+                                                   num_samples, p=label_weights)).to(self.device)
+        return labels
 
     def save_model(self, epoch):
         torch.save({
@@ -272,7 +273,7 @@ class BaseGAN:
 
 class CGAN(BaseGAN):
 
-    def __init__(self, G, D, G_optimizer, D_optimizer, criterion=None, model_save_dir=None, log_dir=None, device=None):
+    def __init__(self, G, D, G_optimizer, D_optimizer, model_save_dir=None, log_dir=None, device=None):
         """
         Implements the conditional GAN (cGAN) architecture.
         Paper:
@@ -284,13 +285,12 @@ class CGAN(BaseGAN):
             D: torch.nn.Module. The discriminator part of the GAN.
             G_optimizer: torch Optimizer. Generator optimizer.
             D_optimizer: torch Optimizer. Discriminator optimizer.
-            criterion: torch criterion. Loss function to optimizer for.
             model_save_dir: String. Directory path to save trained model to.
             log_dir: String. Directory path to log TensorBoard logs to.
             device: torch.device. Either cpu or gpu device.
         """
         super().__init__(G, D, G_optimizer, D_optimizer, model_save_dir, log_dir, device)
-        self.criterion = criterion.to(self.device)
+        self.criterion = torch.nn.BCEWithLogitsLoss().to(self.device)
 
     def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None):
         """
@@ -307,20 +307,19 @@ class CGAN(BaseGAN):
         batch_size = features.shape[0]
         real = torch.FloatTensor(batch_size, 1).fill_(1.0).to(self.device)
         fake = torch.FloatTensor(batch_size, 1).fill_(0.0).to(self.device)
-        generated_features, noise_labels, G_stats = self.fit_generator(batch_size, real, label_weights=label_weights)
-        D_stats = self.fit_discriminator(features, labels, generated_features,
-                                         noise_labels, real, fake)
+        noise, noise_labels = self.make_noise_and_labels(batch_size, label_weights)
+        generated_features, G_stats = self.fit_generator(noise, noise_labels, real)
+        D_stats = self.fit_discriminator(features, labels, generated_features, noise_labels, real, fake)
         return {**G_stats, **D_stats}
 
-    def fit_generator(self, batch_size, real, label_weights=None):
+    def fit_generator(self, noise, noise_labels, real):
         self.G_optimizer.zero_grad(set_to_none=True)
-        noise, noise_labels = self.make_noise_and_labels(batch_size, label_weights)
         generated_features = self.G(noise, noise_labels)
         validity = self.D(generated_features, noise_labels)
         G_loss = self.criterion(validity, real)
         G_loss.backward()
         self.G_optimizer.step()
-        return generated_features, noise_labels, {"G_loss": G_loss.item()}
+        return generated_features, {"G_loss": G_loss.item()}
 
     def fit_discriminator(self, features, labels, generated_features,
                           noise_labels, real, fake):

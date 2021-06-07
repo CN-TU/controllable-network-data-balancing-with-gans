@@ -107,9 +107,7 @@ if __name__ == '__main__':
     elif args.use_acgan:
         gan = ACGAN(G, D, G_optimizer, D_optimizer, model_save_dir=model_save_dir, log_dir=log_dir, device=device)
     else:
-        criterion = torch.nn.BCEWithLogitsLoss()
-        gan = CGAN(G, D, G_optimizer, D_optimizer, criterion,
-                   model_save_dir=model_save_dir, log_dir=log_dir, device=device)
+        gan = CGAN(G, D, G_optimizer, D_optimizer, model_save_dir=model_save_dir, log_dir=log_dir, device=device)
 
     print("Generator:\n", G)
     print("Discriminator:\n", D)
