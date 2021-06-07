@@ -5,20 +5,28 @@ GAN implementations adjusted from
 Contains the following architectures:
     1. Conditional GAN (CGAN)
     2. Auxiliary Classifier GAN (ACGAN)
-    3. Wasserstein GAN (WGAN)
-    4. Wasserstein GAN with gradient penalty (WGAN-GP)
+    3. Conditional Wasserstein GAN (WGAN)
+    4. Conditional Wasserstein GAN with gradient penalty (WGAN-GP)
     5. Auxiliary Classifier Wasserstein GAN (ACWGAN)
 
 
 TODO: condition vector representation
     - separate make_noise_and_labels() into make_noise() and make_labels()
         then make_labels() can create the new condition vector
-    - it would be good to also include the class number as one-hot vector, because then we can have
+    - it would be good to also include the attack type as one-hot vector, because then we can have
         {low, mid, high}-one-hot vectors for each of the features
-    - training/testing set then also need to include the features for the condition vector...
-        - for mean feature flows, this can be extracted from the class_means variable
-        - but when we start using discrete features, these have to be constructed within the dataset
-
+    - continuous (mean) condition vector:
+        -
+    - discrete condition vector:
+        - each feature input will be {low, mid high} == {0, 1, 2}
+            - make_labels will make a one hot vector for each of them
+            - also make a one hot vector for input class
+            - concatenate them and Disc/Gen puts them through a dense layer to map to latent space
+            - currently they have an nn.Embedding layer, but we would require to create embedding for each feature {low, mid, high}
+            - but could also do embedding for each.
+    - training/testing set also need to include the features for the condition vector:
+        - for continuous conditoin can be extracted from the class_means variable
+        - for discrete condition, it has to be constructed at dataset generation
 
 """
 import torch
@@ -279,7 +287,6 @@ class CGAN(BaseGAN):
         Paper:
             https://arxiv.org/pdf/1411.1784.pdf
 
-
         Args:
             G: torch.nn.Module. The generator part of the GAN.
             D: torch.nn.Module. The discriminator part of the GAN.
@@ -336,13 +343,13 @@ class CGAN(BaseGAN):
 
 class CWGAN(BaseGAN):
 
-    def __init__(self, G, D, G_optimizer, D_optimizer, clip_val=0.1, lambda_gp=10,
+    def __init__(self, G, D, G_optimizer, D_optimizer, clip_val=0.1, lambda_gp=10, lambda_auxiliary=0.1,
                  use_gradient_penalty=False, use_auxiliary_classifier=False,
                  model_save_dir=None, log_dir=None, device=None):
         """
-        Implements the conditional Wasserstein-GAN (WGAN), WGAN with gradient penalty (WGAN-GP),
+        Implements the conditional Wasserstein-GAN (WGAN),
+        conditional WGAN with gradient penalty (WGAN-GP),
         and Auxiliary Classifier WGAN (ACWGAN).
-
         Papers:
             https://arxiv.org/pdf/1701.07875.pdf
             https://arxiv.org/pdf/1704.00028.pdf
@@ -366,6 +373,7 @@ class CWGAN(BaseGAN):
         self.lambda_gp = lambda_gp
         self.use_auxiliary_classifier = use_auxiliary_classifier
         self.auxiliary_loss = torch.nn.CrossEntropyLoss().to(self.device)
+        self.lambda_auxiliary = lambda_auxiliary
 
     def _train_epoch(self, features, labels, step, G_train_freq=5, label_weights=None):
         self.set_mode("train")
@@ -407,8 +415,12 @@ class CWGAN(BaseGAN):
     def compute_generator_loss(self, generated_features, noise_labels):
         if self.use_auxiliary_classifier:
             validity, class_preds = self.D(generated_features)
+            # for G it's good if D assigns high validity to generated features --> maximize
+            # --> gradient DESCENT, so we take the negative
+            # also good for G if auxiliary loss of D is low, since then generated features are valid
+            # --> hence decrease loss -->  add second component
             G_loss_adv = -torch.mean(validity)
-            G_loss_aux = -self.auxiliary_loss(class_preds, noise_labels)
+            G_loss_aux = self.auxiliary_loss(class_preds, noise_labels) * self.lambda_auxiliary
             G_loss = (G_loss_adv + G_loss_aux)
             metrics = {"G_loss": G_loss.item(),
                        "G_loss_adv": G_loss_adv.item(),
@@ -423,11 +435,16 @@ class CWGAN(BaseGAN):
         if self.use_auxiliary_classifier:
             validity_real, class_preds_real = self.D(features.float())
             validity_fake, class_preds_fake = self.D(generated_features.detach())
-            D_loss_real = (torch.mean(validity_real) + self.auxiliary_loss(class_preds_real, labels))
-            D_loss_fake = (torch.mean(validity_fake) + self.auxiliary_loss(class_preds_fake, noise_labels))
-            D_loss = -D_loss_real + D_loss_fake
-            pred = np.concatenate([class_preds_real.data.cpu().numpy(), class_preds_fake.data.cpu().numpy()], axis=0)
-            gt = np.concatenate([labels.data.cpu().numpy(), noise_labels.data.cpu().numpy()], axis=0)
+            # Good for D if torch.mean(validity_real) is high, but bad if the aux loss is high
+            # Bad for D if torch.mean(validity_fake) is high and bad if aux loss is high
+            # We take the negative of loss_fake --> add aux loss
+            D_loss_real = (torch.mean(validity_real) -
+                           self.lambda_auxiliary * self.auxiliary_loss(class_preds_real, labels))
+            D_loss_fake = (torch.mean(validity_fake) +
+                           self.lambda_auxiliary * self.auxiliary_loss(class_preds_fake, noise_labels))
+            D_loss = -(D_loss_real - D_loss_fake)
+            pred = np.concatenate([class_preds_real.detach().cpu().numpy(), class_preds_fake.detach().cpu().numpy()], axis=0)
+            gt = np.concatenate([labels.detach().cpu().numpy(), noise_labels.detach().cpu().numpy()], axis=0)
             D_acc = np.mean(np.argmax(pred, axis=1) == gt)
         else:
             validity_real = self.D(features.float(), labels)
@@ -471,7 +488,7 @@ class CWGAN(BaseGAN):
 
 class ACGAN(BaseGAN):
 
-    def __init__(self, G, D, G_optimizer, D_optimizer,
+    def __init__(self, G, D, G_optimizer, D_optimizer, lambda_auxiliary=0.1,
                  model_save_dir=None, log_dir=None, device=None):
         """
         Implements the Auxiliary classifier GAN (AC-GAN)
@@ -491,6 +508,7 @@ class ACGAN(BaseGAN):
         super().__init__(G, D, G_optimizer, D_optimizer, model_save_dir, log_dir, device)
         self.adversarial_loss = torch.nn.BCEWithLogitsLoss().to(self.device)
         self.auxiliary_loss = torch.nn.CrossEntropyLoss().to(self.device)
+        self.lambda_auxiliary = lambda_auxiliary
 
     def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None):
         self.set_mode("train")
@@ -508,7 +526,7 @@ class ACGAN(BaseGAN):
         generated_features = self.G(noise, noise_labels)
         validity, class_preds = self.D(generated_features)
         G_loss_adv = self.adversarial_loss(validity, real)
-        G_loss_aux = self.auxiliary_loss(class_preds, noise_labels)
+        G_loss_aux = self.auxiliary_loss(class_preds, noise_labels) * self.lambda_auxiliary
         G_loss = G_loss_adv + G_loss_aux
         G_loss.backward()
         self.G_optimizer.step()
@@ -521,8 +539,10 @@ class ACGAN(BaseGAN):
         validity_real, class_preds_real = self.D(features.float())
         validity_fake, class_preds_fake = self.D(generated_features.detach())
 
-        D_loss_real = (self.adversarial_loss(validity_real, real) + self.auxiliary_loss(class_preds_real, labels))
-        D_loss_fake = (self.adversarial_loss(validity_fake, fake) + self.auxiliary_loss(class_preds_fake, noise_labels))
+        D_loss_real = (self.adversarial_loss(validity_real, real) +
+                       self.lambda_auxiliary * self.auxiliary_loss(class_preds_real, labels))
+        D_loss_fake = (self.adversarial_loss(validity_fake, fake) +
+                       self.lambda_auxiliary * self.auxiliary_loss(class_preds_fake, noise_labels))
         D_loss = (D_loss_real + D_loss_fake)
 
         # Calculate discriminator accuracy

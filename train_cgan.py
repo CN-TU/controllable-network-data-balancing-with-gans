@@ -36,8 +36,8 @@ def get_model_name(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n_epochs", type=int, default=200)
-    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--n_epochs", type=int, default=150)
+    parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--num_cpu", type=int, default=-1)
     parser.add_argument("--latent_dim", type=int, default=100)
     parser.add_argument("--num_features", type=int, default=79)
