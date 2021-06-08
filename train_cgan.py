@@ -34,11 +34,24 @@ def get_model_name(args):
     return model_name
 
 
+def make_optimizer(G, D, args):
+    if args.use_gp:
+        G_optimizer = torch.optim.Adam(G.parameters(), lr=args.lr, betas=(0.5, 0.999))
+        D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr, betas=(0.5, 0.999))
+    elif args.use_wgan:
+        G_optimizer = torch.optim.RMSprop(G.parameters(), lr=args.lr)
+        D_optimizer = torch.optim.RMSprop(D.parameters(), lr=args.lr)
+    else:
+        G_optimizer = torch.optim.Adam(G.parameters(), lr=args.lr)
+        D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr)
+    return G_optimizer, D_optimizer
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_epochs", type=int, default=150)
     parser.add_argument("--batch_size", type=int, default=256)
-    parser.add_argument("--num_cpu", type=int, default=-1)
+    parser.add_argument("--num_cpu", type=int, default=0)
     parser.add_argument("--latent_dim", type=int, default=100)
     parser.add_argument("--num_features", type=int, default=79)
     parser.add_argument("--num_labels", type=int, default=14)
@@ -74,8 +87,9 @@ if __name__ == '__main__':
     print("Loading dataset...")
     train_dataset = CIC17Dataset(args.data_path + "train_dataset_scaled.pt", is_scaled=True)
     test_dataset = CIC17Dataset(args.data_path + "test_dataset_scaled.pt", is_scaled=True)
-    train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    test_loader = data.DataLoader(test_dataset, batch_size=args.batch_size)
+    train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
+                                   num_workers=args.num_cpu, pin_memory=True)
+    test_loader = data.DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.num_cpu)
 
     classifier = joblib.load(args.classifier_path)
     cols_to_plot = ["Source Port", "Destination Port", "Flow Duration", "Flow Packets/s", "Fwd Packets/s",
@@ -90,15 +104,7 @@ if __name__ == '__main__':
                       args.num_labels,
                       use_label_condition=not (args.use_acgan or args.use_auxiliary_classifier),
                       use_class_head=(args.use_acgan or args.use_auxiliary_classifier)).to(device)
-    if args.use_gp:
-        G_optimizer = torch.optim.Adam(G.parameters(), lr=args.lr, betas=(0.5, 0.999))
-        D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr, betas=(0.5, 0.999))
-    elif args.use_wgan:
-        G_optimizer = torch.optim.RMSprop(G.parameters(), lr=args.lr)
-        D_optimizer = torch.optim.RMSprop(D.parameters(), lr=args.lr)
-    else:
-        G_optimizer = torch.optim.Adam(G.parameters(), lr=args.lr)
-        D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr)
+    G_optimizer, D_optimizer = make_optimizer(G, D, args)
 
     if args.use_wgan:
         gan = CWGAN(G, D, G_optimizer, D_optimizer,
