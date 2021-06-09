@@ -463,7 +463,7 @@ class CWGAN(BaseGAN):
 
         metrics = {"D_loss": D_loss.item(), "D_loss_real": D_loss_real.item(), "D_loss_fake": D_loss_fake.item()}
         if self.use_auxiliary_classifier:
-            metrics.update({"D_loss_aux": D_loss_aux.item(), "D_acc": D_acc})
+            metrics.update({"D_loss_aux": D_loss_aux.item(), "D_acc": D_acc,})
             return D_loss, D_loss_aux, metrics
         return D_loss, None, metrics
 
@@ -524,12 +524,12 @@ class ACGAN(BaseGAN):
         self.G_optimizer.zero_grad(set_to_none=True)
         generated_features = self.G(noise, noise_labels)
         validity, class_preds = self.D(generated_features)
-        G_loss = self.adversarial_loss(validity, real)
+        G_loss_adv = self.adversarial_loss(validity, real)
         G_loss_aux = self.auxiliary_loss(class_preds, noise_labels) * self.lambda_auxiliary
-        G_loss.backward(retain_graph=True)
-        G_loss_aux.backward()
+        G_loss = G_loss_adv + G_loss_aux
+        G_loss.backward()
         self.G_optimizer.step()
-        metrics = {"G_loss": G_loss.item(), "G_loss_aux": G_loss_aux.item()}
+        metrics = {"G_loss": G_loss.item(), "G_loss_adv": G_loss_adv.item(), "G_loss_aux": G_loss_aux.item()}
         return generated_features, metrics
 
     def fit_discriminator(self, features, labels, generated_features,
@@ -538,24 +538,22 @@ class ACGAN(BaseGAN):
         validity_real, class_preds_real = self.D(features.float())
         validity_fake, class_preds_fake = self.D(generated_features.detach())
 
-        D_loss_real = self.adversarial_loss(validity_real, real)
-        D_loss_fake = self.adversarial_loss(validity_fake, fake)
+        D_loss_real = (self.adversarial_loss(validity_real, real) +
+                       self.lambda_auxiliary * self.auxiliary_loss(class_preds_real, labels))
+        D_loss_fake = (self.adversarial_loss(validity_fake, fake) +
+                       self.lambda_auxiliary * self.auxiliary_loss(class_preds_fake, noise_labels))
         D_loss = (D_loss_real + D_loss_fake)
-        D_loss_real_aux = self.auxiliary_loss(class_preds_real, labels)
-        D_loss_fake_aux = self.auxiliary_loss(class_preds_fake, noise_labels)
-        D_loss_aux = (D_loss_real_aux + D_loss_fake_aux)
 
         # Calculate discriminator accuracy
-        pred = np.concatenate([class_preds_real.detach().cpu().numpy(), class_preds_fake.detach().cpu().numpy()],axis=0)
+        pred = np.concatenate([class_preds_real.detach().cpu().numpy(), class_preds_fake.detach().cpu().numpy()],
+                              axis=0)
         gt = np.concatenate([labels.detach().cpu().numpy(), noise_labels.detach().cpu().numpy()], axis=0)
         D_acc = np.mean(np.argmax(pred, axis=1) == gt)
 
-        D_loss.backward(retain_graph=True)
-        D_loss_aux.backward()
+        D_loss.backward()
         self.D_optimizer.step()
 
         return {"D_loss": D_loss.item(),
                 "D_loss_real": D_loss_real.item(),
                 "D_loss_fake": D_loss_fake.item(),
-                "D_loss_aux": D_loss_aux.item(),
                 "D_acc": D_acc}
