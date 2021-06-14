@@ -9,26 +9,12 @@ Contains the following architectures:
     4. Conditional Wasserstein GAN with gradient penalty (WGAN-GP)
     5. Auxiliary Classifier Wasserstein GAN (ACWGAN)
 
-
-TODO: condition vector representation
-    - separate make_noise_and_labels() into make_noise() and make_labels()
-        then make_labels() can create the new condition vector
-    - it would be good to also include the attack type as one-hot vector, because then we can have
-        {low, mid, high}-one-hot vectors for each of the features
-    - continuous (mean) condition vector:
-        -
-    - discrete condition vector:
-        - each feature input will be {low, mid high} == {0, 1, 2}
-            - make_labels will make a one hot vector for each of them
-            - also make a one hot vector for input class
-            - concatenate them and Disc/Gen puts them through a dense layer to map to latent space
-            - currently they have an nn.Embedding layer, but we would require to create embedding for each feature {low, mid, high}
-            - but could also do embedding for each.
-    - training/testing set also need to include the features for the condition vector:
-        - for continuous conditoin can be extracted from the class_means variable
-        - for discrete condition, it has to be constructed at dataset generation
-
 """
+
+# TODO:
+#   - validate condition vector approach
+#   - adjust other GAN architectures (only CGAN right now. )
+
 import torch
 import numpy as np
 
@@ -76,7 +62,8 @@ class BaseGAN:
             print("Writing logs to: ", self.log_dir)
             self.logger = utils.Logger(self.summary_writer)
 
-    def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, G_train_freq=1, label_weights=None):
+    def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, G_train_freq=1,
+                    label_weights=None, condition_vector_dict=None):
         """
         Runs a single training epoch.
 
@@ -86,6 +73,7 @@ class BaseGAN:
             log_freq: Int. Determines the logging frequency for commandline outputs.
             log_tensorboard_freq: Int. Determines the logging frequency of TensorBoard logs.
             label_weights: None or List. Weights used for random generation of fake labels.
+            condition_vector_dict: Dict. If given, the custom condition vectors are used instead of the label condition.
 
         """
         total_steps = len(train_loader)
@@ -93,10 +81,15 @@ class BaseGAN:
         with tqdm(total=total_steps, desc="Train loop") as pbar:
             for step, (features, labels) in enumerate(train_loader):
                 features = features.to(self.device)
+                if condition_vector_dict:
+                    # TODO: converting to numpy is costly, better add condition vector to dataset at creation
+                    condition_vectors = self.make_condition_vectors(labels.numpy(), condition_vector_dict)
                 labels = labels.to(self.device)
 
                 # update params
-                stats = self._train_epoch(features, labels, step, G_train_freq, label_weights)
+                stats = self._train_epoch(features, labels, step, G_train_freq, label_weights,
+                                          condition_vectors if condition_vector_dict else None,
+                                          condition_vector_dict)
 
                 # logging
                 running_stats = {k: v + stats[k] for k, v in running_stats.items() if k in stats}
@@ -113,13 +106,15 @@ class BaseGAN:
             stats_epoch = {"GAN_losses_epoch/" + k: v / total_steps for k, v in running_stats.items()}
             self.logger.log_to_tensorboard(stats_epoch, epoch, 0, 1)
 
-    def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None):
+    def _train_epoch(self, features, labels, step, G_train_freq=1,
+                     label_weights=None, condition_vectors=None, condition_vector_dict=None):
         raise NotImplementedError()
 
     def evaluate(self, dataset, cols_to_plot, step,
                  num_samples=1024, label_weights=None, classifier=None,
                  scaler=None, label_encoder=None, class_means=None,
-                 significance_test=None, compute_euclidean_distances=False):
+                 significance_test=None, compute_euclidean_distances=False,
+                 condition_vector_dict=None):
         """
         Evaluates the generated features:
             - Compares generated feature distributions with actual distributions of the given test set.
@@ -143,11 +138,12 @@ class BaseGAN:
             significance_test: Str or None. If given, indicates what significance test should be run.
             compute_euclidean_distances: Bool. Indicates whether euclidean distances between generated features and mean
                     flow of entire dataset should be computed per class.
+            condition_vector_dict: Dict. If given, the custom condition vectors are used instead of the label condition.
         """
         self.set_mode("eval")
         col_to_idx = {col: i for i, col in enumerate(dataset.column_names)}
-
-        generated_features, labels = self.generate(num_samples, label_weights)
+        generated_features, labels, _ = self.generate(num_samples, label_weights=label_weights,
+                                                      condition_vector_dict=condition_vector_dict)
         generated_features = generated_features.cpu()
         labels = labels.cpu()
 
@@ -201,7 +197,8 @@ class BaseGAN:
             distance_by_class = {"Distance_measures/" + k: v for k, v in distance_by_class.items()}
             self.logger.log_to_tensorboard(distance_by_class, step, 0, 1)
 
-    def generate(self, num_samples=1024, label_weights=None, scaler=None, label_encoder=None):
+    def generate(self, num_samples=1024, label_weights=None,
+                 scaler=None, label_encoder=None, condition_vector_dict=None):
         """
         Generates the given number of fake flows.
 
@@ -210,34 +207,47 @@ class BaseGAN:
             label_weights: None or List. Weights used for random generation of fake labels.
             scaler: sklearn model.
             label_encoder: sklearn model.
-        Returns: torch.Tensor of generated samples, torch.Tensor of generated labels
+            condition_vector_dict: Dict. If given, the custom condition vectors are used instead of the label condition.
+
+        Returns: torch.Tensor of generated samples, torch.Tensor of generated labels,
+                 (optionally) torch.Tensor of condition vectors
 
         """
         self.set_mode("eval")
         with torch.no_grad():
-            noise, labels = self.make_noise_and_labels(num_samples, label_weights)
-            generated_features = self.G(noise, labels)
+            noise, labels, condition_vectors = self.make_noise_and_labels(num_samples, label_weights,
+                                                                          condition_vector_dict)
+            generated_features = self.G(noise, labels if condition_vectors is None else condition_vectors)
+
         if scaler:
             generated_features = scaler.inverse_transform(generated_features)
         if label_encoder:
             labels = label_encoder.inverse_transform(labels)
+        if condition_vector_dict:
+            return generated_features, labels, condition_vectors
         return generated_features, labels
 
-    def make_noise_and_labels(self, num_samples, label_weights=None):
+    def make_noise_and_labels(self, num_samples, label_weights=None, condition_vector_dict=None):
         noise = self.make_noise(num_samples)
-        noise_labels = self.make_labels(num_samples, label_weights)
-        return noise, noise_labels
+        # make raw labels np.array, to avoid converting back for condition vector
+        raw_labels = self.make_labels(num_samples, label_weights)
+        noise_labels = torch.LongTensor(raw_labels).to(self.device)
+        condition_vectors = None
+        if condition_vector_dict:
+            condition_vectors = self.make_condition_vectors(raw_labels, condition_vector_dict)
+        return noise, noise_labels, condition_vectors
 
     def make_noise(self, num_samples):
         return torch.FloatTensor(np.random.normal(0, 1, (num_samples, self.latent_dim))).to(self.device)
 
     def make_labels(self, num_samples, label_weights):
-        # if self.custom_condition_vector:
-        #     pass
-        # else:
-        labels = torch.LongTensor(np.random.choice(np.arange(0, self.num_labels),
-                                                   num_samples, p=label_weights)).to(self.device)
-        return labels
+        return np.random.choice(np.arange(0, self.num_labels), num_samples, p=label_weights)
+
+    def make_condition_vectors(self, labels, condition_vector_dict):
+        condition_vectors = []
+        for label in labels:
+            condition_vectors.append(condition_vector_dict[label])
+        return torch.Tensor(condition_vectors).to(self.device)
 
     def save_model(self, epoch):
         torch.save({
@@ -299,13 +309,14 @@ class CGAN(BaseGAN):
         super().__init__(G, D, G_optimizer, D_optimizer, model_save_dir, log_dir, device)
         self.criterion = torch.nn.BCEWithLogitsLoss().to(self.device)
 
-    def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None):
+    def _train_epoch(self, features, labels, step, G_train_freq=1,
+                     label_weights=None, condition_vectors=None, condition_vector_dict=None):
         """
         Fits GAN. Is called by train_epoch() method.
         Args:
             features: torch.Tensor.
             labels: torch.Tensor.
-            label_weights:
+            label_weights: List.
 
         Returns: a dictionary, stats
 
@@ -314,9 +325,24 @@ class CGAN(BaseGAN):
         batch_size = features.shape[0]
         real = torch.FloatTensor(batch_size, 1).fill_(1.0).to(self.device)
         fake = torch.FloatTensor(batch_size, 1).fill_(0.0).to(self.device)
-        noise, noise_labels = self.make_noise_and_labels(batch_size, label_weights)
-        generated_features, G_stats = self.fit_generator(noise, noise_labels, real)
-        D_stats = self.fit_discriminator(features, labels, generated_features, noise_labels, real, fake)
+        noise, noise_labels, noise_condition_vectors = self.make_noise_and_labels(
+            batch_size,
+            label_weights,
+            condition_vector_dict
+        )
+        generated_features, G_stats = self.fit_generator(
+            noise,
+            noise_labels if noise_condition_vectors is None else noise_condition_vectors,
+            real
+        )
+        D_stats = self.fit_discriminator(
+            features,
+            labels if condition_vectors is None else condition_vectors,
+            generated_features,
+            noise_labels if noise_condition_vectors is None else noise_condition_vectors,
+            real,
+            fake
+        )
         return {**G_stats, **D_stats}
 
     def fit_generator(self, noise, noise_labels, real):
@@ -375,10 +401,11 @@ class CWGAN(BaseGAN):
         self.auxiliary_loss = torch.nn.CrossEntropyLoss().to(self.device)
         self.lambda_auxiliary = lambda_auxiliary
 
-    def _train_epoch(self, features, labels, step, G_train_freq=5, label_weights=None):
+    def _train_epoch(self, features, labels, step, G_train_freq=5,
+                     label_weights=None, condition_vectors=None, condition_vector_dict=None):
         self.set_mode("train")
         batch_size = features.shape[0]
-        noise, noise_labels = self.make_noise_and_labels(batch_size, label_weights)
+        noise, noise_labels, _ = self.make_noise_and_labels(batch_size, label_weights)
         generated_features = self.G(noise, noise_labels)
 
         # train discriminator
@@ -387,7 +414,7 @@ class CWGAN(BaseGAN):
         # train generator
         G_stats = dict()
         if step % G_train_freq == 0:
-            noise, noise_labels = self.make_noise_and_labels(batch_size, label_weights)
+            noise, noise_labels, _ = self.make_noise_and_labels(batch_size, label_weights)
             generated_features, noise_labels, G_stats = self.fit_generator(noise, noise_labels)
             # generated_features, noise_labels, G_stats = self.fit_generator(generated_features, noise_labels)
 
@@ -509,12 +536,13 @@ class ACGAN(BaseGAN):
         self.auxiliary_loss = torch.nn.CrossEntropyLoss().to(self.device)
         self.lambda_auxiliary = lambda_auxiliary
 
-    def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None):
+    def _train_epoch(self, features, labels, step, G_train_freq=1,
+                     label_weights=None, condition_vectors=None, condition_vector_dict=None):
         self.set_mode("train")
         batch_size = features.shape[0]
         real = torch.FloatTensor(batch_size, 1).fill_(1.0).to(self.device)
         fake = torch.FloatTensor(batch_size, 1).fill_(0.0).to(self.device)
-        noise, noise_labels = self.make_noise_and_labels(batch_size, label_weights)
+        noise, noise_labels, _ = self.make_noise_and_labels(batch_size, label_weights)
         generated_features, G_stats = self.fit_generator(noise, noise_labels, real)
         D_stats = self.fit_discriminator(features, labels, generated_features,
                                          noise_labels, real, fake)
