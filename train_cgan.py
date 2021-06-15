@@ -31,7 +31,7 @@ def get_model_name(args):
         model_name = "acgan"
     else:
         model_name = "cgan"
-    return model_name + "_with_condition_vector" if args.use_condition_vectors else ""
+    return model_name + "_with_condition_vector" if args.use_condition_vectors else model_name
 
 
 def make_generator_and_discriminator(device, args):

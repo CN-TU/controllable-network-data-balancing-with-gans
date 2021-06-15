@@ -229,7 +229,7 @@ class BaseGAN:
             labels = label_encoder.inverse_transform(labels)
         if condition_vector_dict:
             return generated_features, labels, condition_vectors
-        return generated_features, labels
+        return generated_features, labels, None
 
     def make_noise_and_labels(self, num_samples, label_weights=None, condition_vector_dict=None):
         noise = self.make_noise(num_samples)
