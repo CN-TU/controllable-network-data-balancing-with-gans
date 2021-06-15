@@ -21,7 +21,6 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime
 from tqdm import tqdm
-from tensorboardX import SummaryWriter
 from sklearn.metrics import classification_report
 
 import utils
@@ -29,7 +28,7 @@ import utils
 
 class BaseGAN:
 
-    def __init__(self, G, D, G_optimizer, D_optimizer, model_save_dir=None, log_dir=None, device=None):
+    def __init__(self, G, D, G_optimizer, D_optimizer, use_wandb=False, model_save_dir=None, log_dir=None, device=None):
         """
 
         Args:
@@ -40,6 +39,7 @@ class BaseGAN:
             model_save_dir: String. Directory path to save trained model to.
             log_dir: String. Directory path to log TensorBoard logs to.
             device: torch.device. Either cpu or gpu device.
+            use_wandb: Bool. Indicates whether Weights & Biases model tracking should be used.
         """
         self.G, self.D = G, D
         self.G_optimizer, self.D_optimizer = G_optimizer, D_optimizer
@@ -50,6 +50,7 @@ class BaseGAN:
         self.D.to(self.device)
         self.model_save_dir = model_save_dir
         self.log_dir = log_dir
+        self.use_wandb = use_wandb
         time = datetime.now().strftime("%d-%m-%Y_%Hh%Mm")
         if self.model_save_dir:
             self.model_save_dir = Path(model_save_dir) / time
@@ -58,9 +59,11 @@ class BaseGAN:
         if self.log_dir:
             self.log_dir = Path(log_dir) / time
             Path(self.log_dir).mkdir(parents=True, exist_ok=True)
-            self.summary_writer = SummaryWriter(self.log_dir)
             print("Writing logs to: ", self.log_dir)
-            self.logger = utils.Logger(self.summary_writer)
+            self.logger = utils.Logger(self.log_dir, self.use_wandb, {"architecture": self.__class__.__name__})
+            if self.use_wandb:
+                import wandb
+                self.logger.watch_wandb(self.G, self.D)
 
     def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, G_train_freq=1,
                     label_weights=None, condition_vector_dict=None):
@@ -100,6 +103,9 @@ class BaseGAN:
                     stats = {"GAN_losses/" + k: v for k, v in stats.items()}
                     self.logger.log_to_tensorboard(stats, epoch, step, total_steps)
                 pbar.update(1)
+            if self.use_wandb:
+                # to enable gradient logging, .log() has to be called once after backwards() pass.
+                self.logger.wandb_dummy_log()
 
         # logs after epoch
         if self.log_dir:
@@ -151,8 +157,7 @@ class BaseGAN:
             idx = col_to_idx[col]
             real = dataset.X[:, idx]
             fake = generated_features[:, idx]
-            dist_plot = utils.make_distplot(real, fake.cpu(), col)
-            self.summary_writer.add_image("Distributions/" + col, dist_plot, step)
+            self.logger.add_distplot(real, fake.cpu(), col, step)
 
         if classifier and label_encoder:
             label_preds = classifier.predict(generated_features if not scaler
@@ -170,8 +175,7 @@ class BaseGAN:
             metrics = {"Classifier/" + k: v for k, v in metrics.items()}
             self.logger.log_to_tensorboard(metrics, step, 0, 1)
             print(classification_report(labels_transformed, label_preds))
-            confusion_matrix = utils.make_confusion_matrix(labels_transformed, label_preds)
-            self.summary_writer.add_image("classifier_confusion_matrix", confusion_matrix, step)
+            self.logger.add_confusion_matric(labels_transformed, label_preds, step)
 
         if significance_test:
             n_real_features_by_class = utils.run_significance_tests(
@@ -291,7 +295,7 @@ class BaseGAN:
 
 class CGAN(BaseGAN):
 
-    def __init__(self, G, D, G_optimizer, D_optimizer, model_save_dir=None, log_dir=None, device=None):
+    def __init__(self, G, D, G_optimizer, D_optimizer, use_wandb=False, model_save_dir=None, log_dir=None, device=None):
         """
         Implements the conditional GAN (cGAN) architecture.
         Paper:
@@ -305,8 +309,10 @@ class CGAN(BaseGAN):
             model_save_dir: String. Directory path to save trained model to.
             log_dir: String. Directory path to log TensorBoard logs to.
             device: torch.device. Either cpu or gpu device.
+            use_wandb: Bool. Indicates whether Weights & Biases model tracking should be used.
+
         """
-        super().__init__(G, D, G_optimizer, D_optimizer, model_save_dir, log_dir, device)
+        super().__init__(G, D, G_optimizer, D_optimizer, use_wandb, model_save_dir, log_dir, device)
         self.criterion = torch.nn.BCEWithLogitsLoss().to(self.device)
 
     def _train_epoch(self, features, labels, step, G_train_freq=1,
@@ -370,7 +376,7 @@ class CGAN(BaseGAN):
 class CWGAN(BaseGAN):
 
     def __init__(self, G, D, G_optimizer, D_optimizer, clip_val=0.1, lambda_gp=10, lambda_auxiliary=1,
-                 use_gradient_penalty=False, use_auxiliary_classifier=False,
+                 use_gradient_penalty=False, use_auxiliary_classifier=False, use_wandb=False,
                  model_save_dir=None, log_dir=None, device=None):
         """
         Implements the conditional Wasserstein-GAN (WGAN),
@@ -392,8 +398,10 @@ class CWGAN(BaseGAN):
             model_save_dir: String. Directory path to save trained model to.
             log_dir: String. Directory path to log TensorBoard logs to.
             device: torch.device. Either cpu or gpu device.
+            use_wandb: Bool. Indicates whether Weights & Biases model tracking should be used.
+
         """
-        super().__init__(G, D, G_optimizer, D_optimizer, model_save_dir, log_dir, device)
+        super().__init__(G, D, G_optimizer, D_optimizer, use_wandb, model_save_dir, log_dir, device)
         self.use_gradient_penalty = use_gradient_penalty
         self.clip_val = clip_val
         self.lambda_gp = lambda_gp
@@ -515,7 +523,7 @@ class CWGAN(BaseGAN):
 class ACGAN(BaseGAN):
 
     def __init__(self, G, D, G_optimizer, D_optimizer, lambda_auxiliary=1.0,
-                 model_save_dir=None, log_dir=None, device=None):
+                 use_wandb=False, model_save_dir=None, log_dir=None, device=None):
         """
         Implements the Auxiliary classifier GAN (AC-GAN)
         Paper:
@@ -530,8 +538,10 @@ class ACGAN(BaseGAN):
             model_save_dir: String. Directory path to save trained model to.
             log_dir: String. Directory path to log TensorBoard logs to.
             device: torch.device. Either cpu or gpu device.
+            use_wandb: Bool. Indicates whether Weights & Biases model tracking should be used.
+
         """
-        super().__init__(G, D, G_optimizer, D_optimizer, model_save_dir, log_dir, device)
+        super().__init__(G, D, G_optimizer, D_optimizer, use_wandb, model_save_dir, log_dir, device)
         self.adversarial_loss = torch.nn.BCEWithLogitsLoss().to(self.device)
         self.auxiliary_loss = torch.nn.CrossEntropyLoss().to(self.device)
         self.lambda_auxiliary = lambda_auxiliary

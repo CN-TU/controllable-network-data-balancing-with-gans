@@ -37,7 +37,8 @@ def get_model_name(args):
 def make_generator_and_discriminator(device, args):
     if args.use_condition_vectors:
         G = GeneratorWithCondition(args.num_features, args.num_labels, args.condition_size,
-                                   latent_dim=args.latent_dim, condition_latent_dim=args.latent_dim).to(device)
+                                   latent_dim=args.latent_dim,
+                                   condition_latent_dim=args.condition_latent_dim).to(device)
         D = DiscriminatorWithCondition(args.num_features, args.condition_size,
                                        num_labels=args.num_labels,
                                        use_label_condition=not (args.use_acgan or args.use_auxiliary_classifier),
@@ -95,6 +96,8 @@ if __name__ == '__main__':
     parser.add_argument("--use_condition_vectors", action="store_true",
                         help="Indicates whether the precomputed condition vector should be used instead of the "
                              "attack labels.")
+    parser.add_argument("--use_wandb", action="store_true",
+                        help="Indicates if logs should be written to Weights & Biases in addition to TensorBoard.")
     # str args
     parser.add_argument("--significance_test", type=str)
     parser.add_argument("--log_dir", type=str, default="./tensorboard", help="TensorBoard log dir.")
@@ -130,11 +133,14 @@ if __name__ == '__main__':
     if args.use_wgan:
         gan = CWGAN(G, D, G_optimizer, D_optimizer,
                     use_gradient_penalty=args.use_gp, use_auxiliary_classifier=args.use_auxiliary_classifier,
-                    model_save_dir=model_save_dir, log_dir=log_dir, clip_val=args.clip_val, device=device)
+                    model_save_dir=model_save_dir, log_dir=log_dir, clip_val=args.clip_val, device=device,
+                    use_wandb=args.use_wandb)
     elif args.use_acgan:
-        gan = ACGAN(G, D, G_optimizer, D_optimizer, model_save_dir=model_save_dir, log_dir=log_dir, device=device)
+        gan = ACGAN(G, D, G_optimizer, D_optimizer, model_save_dir=model_save_dir,
+                    log_dir=log_dir, device=device, use_wandb=args.use_wandb)
     else:
-        gan = CGAN(G, D, G_optimizer, D_optimizer, model_save_dir=model_save_dir, log_dir=log_dir, device=device)
+        gan = CGAN(G, D, G_optimizer, D_optimizer, model_save_dir=model_save_dir,
+                   log_dir=log_dir, device=device, use_wandb=args.use_wandb)
 
     print("Generator:\n", G)
     print("Discriminator:\n", D)
@@ -146,6 +152,8 @@ if __name__ == '__main__':
                   "G": str(G), "D": str(D), "G_optimizer": str(G), "D_optimizer": str(D)}
     with open(gan.log_dir / "all_params.json", "w") as f:
         json.dump(all_params, f, indent=4, sort_keys=True)
+    if args.use_wandb:
+        gan.logger.update_wandb_config(all_params)
 
     print("Starting train loop...")
     for epoch in range(args.n_epochs):

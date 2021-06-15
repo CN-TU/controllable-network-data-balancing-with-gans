@@ -5,9 +5,11 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import wandb
 
 from scikitplot.metrics import plot_confusion_matrix
 from torchvision.transforms import ToTensor
+from tensorboardX import SummaryWriter
 
 
 def make_distplot(real, fake, feature_name):
@@ -124,8 +126,12 @@ def compute_euclidean_distance_by_class(class_means, generated_features, generat
 
 class Logger:
 
-    def __init__(self, summary_writer):
-        self.summary_writer = summary_writer
+    def __init__(self, log_dir=None, use_wandb=False, wandb_config=None):
+        if log_dir:
+            # make wandb before calling TensorBoard
+            if use_wandb:
+                self.setup_wandb(log_dir, wandb_config)
+            self.summary_writer = SummaryWriter(log_dir)
 
     @staticmethod
     def log_to_commandline(stats, epoch, step, total_steps):
@@ -136,6 +142,14 @@ class Logger:
         global_step = epoch * steps_per_epoch + step
         for k, v in stats.items():
             self.summary_writer.add_scalar(k, v, global_step=global_step)
+
+    def add_distplot(self, real, fake, col, step):
+        dist_plot = make_distplot(real, fake, col)
+        self.summary_writer.add_image("Distributions/" + col, dist_plot, step)
+
+    def add_confusion_matric(self, labels, preds, step):
+        confusion_matrix = make_confusion_matrix(labels, preds)
+        self.summary_writer.add_image("classifier_confusion_matrix", confusion_matrix, step)
 
     def add_all_custom_scalars(self):
         layout = {
@@ -153,6 +167,23 @@ class Logger:
             }
         }
         self.summary_writer.add_custom_scalars(layout)
+
+    def setup_wandb(self, log_dir, wandb_config):
+        wandb.login()
+        # tracks everything that TensorBoard tracks
+        # writes to same dir as TesnorBoard
+        wandb.init(project="interdisciplinary_project", name=str(log_dir),
+                   dir=log_dir, sync_tensorboard=True, config=wandb_config)
+
+    def watch_wandb(self, G, D):
+        wandb.watch(G, log="all")
+        wandb.watch(D, log="all")
+
+    def update_wandb_config(self, config):
+        wandb.config.update(config)
+
+    def wandb_dummy_log(self):
+        wandb.log({"test": 1})
 
 
 if __name__ == "__main__":
