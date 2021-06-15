@@ -25,7 +25,7 @@ from sklearn.metrics import classification_report
 
 import utils
 
-
+#test
 class BaseGAN:
 
     def __init__(self, G, D, G_optimizer, D_optimizer, use_wandb=False, model_save_dir=None, log_dir=None, device=None):
