@@ -81,7 +81,7 @@ def get_linear_vector(df, df_means, label, feature, steps=3):
 
 def get_percentile_vector(df, df_means, label, feature):
     """
-    Get percentile interval for a given feature of a given class feature (50%-median and 85%).
+    Get percentile interval for a given feature of a given class feature (35%-median and 65%).
 
     Args:
         df: pd.DataFrame. Complete Dataframe.
@@ -90,7 +90,7 @@ def get_percentile_vector(df, df_means, label, feature):
         feature: Str. Feature column.
 
     """
-    t1, t2 = df[feature].quantile(0.5), df[feature].quantile(0.80)
+    t1, t2 = df[feature].quantile(0.35), df[feature].quantile(0.65)
     rep = [int(df_means[feature][label] < t1),
            int(t1 < df_means[feature][label] < t2),
            int(df_means[feature][label] > t2)]
@@ -112,6 +112,7 @@ def compute_static_condition_vectors(df, df_means, relevant_features, vector_typ
     df_mean_condition = df_means[relevant_features]
     representations, levels = {}, {}
     for attack in df_mean_condition.index:
+        # We cannot just use the real Port number, as it will be of a different scale than all other inputs.
         port = int(df_mean_condition['Destination Port'][attack])
         representations[attack] = [[port]]
         levels[attack] = [port]
@@ -211,18 +212,6 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
             torch.save(representations, write_path / f"static_condition_vectors.pt")
             torch.save(levels, write_path / f"static_condition_levels.pt")
             torch.save(condition_vector_features, write_path / f"condition_vector_names.pt")
-        """
-        TODO: 
-        Not clear if static condition vectors per class work.
-        It is static, and the levels that we express in the condition vectors have no relation 
-        to the input features, other than the vector as a whole is unique for each class. 
-        Hence, it can't be better than the class one-hot vector. 
-        
-        An option would be to create a condition vector for each flow in the dataset and let the 
-        discriminator learn the relation of the features with the flows. This is only possible if there
-        is variation within the classes (hence no static input vector). 
-        
-        """
 
 
 class CIC17Dataset(data.Dataset):
@@ -308,8 +297,12 @@ if __name__ == '__main__':
     print(train_dataset.static_condition_levels)
     # check if there are duplicates and which ones.
     levels = collections.defaultdict(list)
+    levels_without_port = collections.defaultdict(list)
     for label, level in train_dataset.static_condition_levels.items():
         levels[tuple(level)].append(label)
+        levels_without_port[tuple(level[1:])].append(label)
+
     print("Duplicates:", not len(levels) == len(train_dataset.static_condition_levels))
     # 'DoS GoldenEye' 'DoS Hulk' have duplicate representations, unfortunately.
     print(levels)
+    print(levels_without_port)

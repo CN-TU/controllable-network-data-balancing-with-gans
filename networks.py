@@ -74,7 +74,7 @@ class Discriminator(nn.Module):
 
 
 class GeneratorWithCondition(nn.Module):
-    def __init__(self, num_features, num_labels, condition_size, latent_dim=100, condition_latent_dim=50):
+    def __init__(self, num_features, num_labels, condition_size, latent_dim=100, condition_latent_dim=25):
         super().__init__()
         self.num_features = num_features
         self.num_labels = num_labels  # not used, required for compatibility
@@ -89,10 +89,12 @@ class GeneratorWithCondition(nn.Module):
             layers.append(nn.LeakyReLU(0.2, inplace=True))
             return layers
 
-        self.fc_condition = nn.Linear(condition_size, condition_latent_dim)
+        self.fc_condition = nn.Sequential(
+            *block(condition_size, condition_latent_dim, normalize=False)
+        )
         self.model = nn.Sequential(
             *block(latent_dim + condition_latent_dim, 256, normalize=False),
-            *block(256, 256),
+            *block(256, 256, normalize=True),
             nn.Linear(256, num_features),
             nn.Sigmoid()
         )
@@ -105,23 +107,33 @@ class GeneratorWithCondition(nn.Module):
 
 
 class DiscriminatorWithCondition(nn.Module):
-    def __init__(self, num_features, condition_size, use_class_head=False, use_label_condition=True, num_labels=None):
+    def __init__(self, num_features, condition_size, condition_latent_dim=25,
+                 use_class_head=False, use_label_condition=True, num_labels=None):
         super().__init__()
         self.num_features = num_features
         self.condition_size = condition_size
         self.use_class_head = use_class_head
         self.use_label_condition = use_label_condition
         self.num_labels = num_labels
+        self.condition_latent_dim = condition_latent_dim
+
+        def block(in_dim, out_dim, normalize=False):
+            layers = [nn.Linear(in_dim, out_dim)]
+            if normalize:
+                layers.append(nn.BatchNorm1d(out_dim))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
 
         input_size = self.num_features
         if self.use_label_condition:
-            input_size += self.condition_size
+            input_size += self.condition_latent_dim
+            self.fc_condition = nn.Sequential(
+                *block(self.condition_size, self.condition_latent_dim),
+            )
 
         self.net = nn.Sequential(
-            nn.Linear(input_size, 256),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 256),
-            nn.LeakyReLU(0.2, inplace=True),
+            *block(input_size, 256),
+            *block(256, 256),
             # nn.Sigmoid()
         )
         self.output_head = nn.Linear(256, 1)
@@ -131,7 +143,7 @@ class DiscriminatorWithCondition(nn.Module):
     def forward(self, features, labels=None):
         # again labels == condition_vector
         if labels is not None and self.use_label_condition:
-            x = torch.cat((features, labels), -1)
+            x = torch.cat((features, self.fc_condition(labels)), -1)
         else:
             x = features
         x = self.net(x)

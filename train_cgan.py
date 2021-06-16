@@ -42,7 +42,8 @@ def make_generator_and_discriminator(device, args):
         D = DiscriminatorWithCondition(args.num_features, args.condition_size,
                                        num_labels=args.num_labels,
                                        use_label_condition=not (args.use_acgan or args.use_auxiliary_classifier),
-                                       use_class_head=(args.use_acgan or args.use_auxiliary_classifier)).to(device)
+                                       use_class_head=(args.use_acgan or args.use_auxiliary_classifier),
+                                       condition_latent_dim=args.condition_latent_dim).to(device)
     else:
         G = Generator(args.num_features, args.num_labels, latent_dim=args.latent_dim).to(device)
         D = Discriminator(args.num_features, args.num_labels,
@@ -74,7 +75,7 @@ if __name__ == '__main__':
     parser.add_argument("--num_labels", type=int, default=14)
     parser.add_argument("--latent_dim", type=int, default=100)
     parser.add_argument("--condition_size", type=int, default=34)
-    parser.add_argument("--condition_latent_dim", type=int, default=50)
+    parser.add_argument("--condition_latent_dim", type=int, default=25)
     parser.add_argument("--G_train_freq", type=int, default=1)
     parser.add_argument("--log_freq", type=int, default=100, help="Write logs to commandline every n steps.")
     parser.add_argument("--log_tensorboard_freq", type=int,

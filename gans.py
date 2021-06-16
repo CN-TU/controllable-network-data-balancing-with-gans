@@ -62,7 +62,6 @@ class BaseGAN:
             print("Writing logs to: ", self.log_dir)
             self.logger = utils.Logger(self.log_dir, self.use_wandb, {"architecture": self.__class__.__name__})
             if self.use_wandb:
-                import wandb
                 self.logger.watch_wandb(self.G, self.D)
 
     def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, G_train_freq=1,
@@ -250,7 +249,8 @@ class BaseGAN:
     def make_condition_vectors(self, labels, condition_vector_dict):
         condition_vectors = []
         for label in labels:
-            condition_vectors.append(condition_vector_dict[label])
+            # condition_vectors.append(condition_vector_dict[label])
+            condition_vectors.append(condition_vector_dict[label][1:])
         return torch.Tensor(condition_vectors).to(self.device)
 
     def save_model(self, epoch):

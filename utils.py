@@ -127,11 +127,21 @@ def compute_euclidean_distance_by_class(class_means, generated_features, generat
 class Logger:
 
     def __init__(self, log_dir=None, use_wandb=False, wandb_config=None):
+        """
+        Looger class for experiments.
+
+        Args:
+            log_dir: Str. Log dir to write TensorBoard/Wandb logs to.
+            use_wandb: Bool. Indicates whether Weights&Biases (wandb) should be used.
+                wandb is nice, as it allows for easy debugging via gradient/param tracking of the models.
+                It also integrates nicely with TensorBoard.
+            wandb_config: Dict.
+        """
         if log_dir:
             # make wandb before calling TensorBoard
             if use_wandb:
-                self.setup_wandb(log_dir, wandb_config)
-            self.summary_writer = SummaryWriter(log_dir)
+                self.setup_wandb(str(log_dir), wandb_config)
+            self.summary_writer = SummaryWriter(str(log_dir))
 
     @staticmethod
     def log_to_commandline(stats, epoch, step, total_steps):
@@ -172,8 +182,9 @@ class Logger:
         wandb.login()
         # tracks everything that TensorBoard tracks
         # writes to same dir as TesnorBoard
-        wandb.init(project="interdisciplinary_project", name=str(log_dir),
-                   dir=log_dir, sync_tensorboard=True, config=wandb_config)
+        wandb.tensorboard.patch(root_logdir=log_dir)
+        wandb.init(project="interdisciplinary_project", name=log_dir,
+                   dir=log_dir, config=wandb_config)
 
     def watch_wandb(self, G, D):
         wandb.watch(G, log="all")
