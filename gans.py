@@ -413,18 +413,29 @@ class CWGAN(BaseGAN):
                      label_weights=None, condition_vectors=None, condition_vector_dict=None):
         self.set_mode("train")
         batch_size = features.shape[0]
-        noise, noise_labels, _ = self.make_noise_and_labels(batch_size, label_weights)
-        generated_features = self.G(noise, noise_labels)
+        noise, noise_labels, noise_condition_vectors = self.make_noise_and_labels(
+            batch_size,
+            label_weights,
+            condition_vector_dict
+        )
+        generated_features = self.G(noise, noise_labels if noise_condition_vectors is None else noise_condition_vectors)
 
         # train discriminator
-        D_stats = self.fit_discriminator(features, labels, generated_features, noise_labels)
+        D_stats = self.fit_discriminator(
+            features,
+            labels if condition_vectors is None else condition_vectors,
+            generated_features,
+            noise_labels if noise_condition_vectors is None else noise_condition_vectors,
+        )
 
         # train generator
         G_stats = dict()
         if step % G_train_freq == 0:
-            noise, noise_labels, _ = self.make_noise_and_labels(batch_size, label_weights)
-            generated_features, noise_labels, G_stats = self.fit_generator(noise, noise_labels)
-            # generated_features, noise_labels, G_stats = self.fit_generator(generated_features, noise_labels)
+            noise, noise_labels, noise_condition_vectors = self.make_noise_and_labels(batch_size, label_weights, condition_vector_dict)
+            generated_features, noise_labels, G_stats = self.fit_generator(
+                noise,
+                noise_labels if noise_condition_vectors is None else noise_condition_vectors
+            )
 
         return {**G_stats, **D_stats}
 
