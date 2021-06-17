@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from .base_gan import BaseGAN
 
 
@@ -124,8 +125,8 @@ class CWGAN(BaseGAN):
         else:
             validity_real = self.D(features.float(), labels)
             validity_fake = self.D(generated_features if self.use_gradient_penalty else generated_features.detach(),
-                                   noise_labels if self.use_gradient_penalty else noise_labels.detach())
-            # validity_fake = self.D(generated_features, noise_labels)
+                                   noise_labels)
+                                   # noise_labels if self.use_gradient_penalty else noise_labels.detach())
 
             D_loss_real = torch.mean(validity_real)
             D_loss_fake = torch.mean(validity_fake)

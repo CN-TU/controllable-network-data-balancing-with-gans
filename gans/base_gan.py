@@ -185,7 +185,7 @@ class BaseGAN:
             n_real_features_by_class = {"N_real_features/" + k: v for k, v in n_real_features_by_class.items()}
             self.logger.log_to_tensorboard(n_real_features_by_class, step, 0, 1)
 
-        if compute_euclidean_distances and not class_means is None:
+        if compute_euclidean_distances and class_means is not None:
             distance_by_class = utils.compute_euclidean_distance_by_class(
                 class_means,
                 generated_features,

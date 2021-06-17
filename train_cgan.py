@@ -155,7 +155,7 @@ if __name__ == '__main__':
 
     print("Saving config params to ", log_dir)
     all_params = {"args": vars(args), "log_dir": log_dir, "model_save_dir": model_save_dir,
-                  "G": str(G), "D": str(D), "G_optimizer": str(G), "D_optimizer": str(D)}
+                  "G": str(G), "D": str(D), "G_optimizer": str(G_optimizer), "D_optimizer": str(D_optimizer)}
     with open(gan.log_dir / "all_params.json", "w") as f:
         json.dump(all_params, f, indent=4, sort_keys=True)
     if args.use_wandb:
