@@ -291,17 +291,12 @@ if __name__ == '__main__':
 
     # 5. validate condition vectors
     import collections
-    print(train_dataset.class_names)
-    print(train_dataset.condition_vector_names)
-    print(train_dataset.static_condition_vectors)
-    print(train_dataset.static_condition_levels)
-    # check if there are duplicates and which ones.
-    levels = collections.defaultdict(list)
-    levels_without_port = collections.defaultdict(list)
+    print(train_dataset.class_names, train_dataset.condition_vector_names)
+    print(train_dataset.static_condition_vectors, train_dataset.static_condition_levels)
+    levels, levels_without_port = collections.defaultdict(list), collections.defaultdict(list)
     for label, level in train_dataset.static_condition_levels.items():
         levels[tuple(level)].append(label)
         levels_without_port[tuple(level[1:])].append(label)
-
     print("Duplicates:", not len(levels) == len(train_dataset.static_condition_levels))
     # 'DoS GoldenEye' 'DoS Hulk' have duplicate representations, unfortunately.
     print(levels)

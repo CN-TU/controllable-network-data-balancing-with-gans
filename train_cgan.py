@@ -14,7 +14,10 @@ import joblib
 import torch
 from torch.utils import data
 
-from gans import CGAN, CWGAN, ACGAN
+import utils
+from gans.cgan import CGAN
+from gans.wgan import CWGAN
+from gans.acgan import ACGAN
 from networks import Generator, Discriminator, GeneratorWithCondition, DiscriminatorWithCondition
 from cic_ids_17_dataset import CIC17Dataset
 
@@ -73,15 +76,16 @@ if __name__ == '__main__':
     parser.add_argument("--num_cpu", type=int, default=0)
     parser.add_argument("--num_features", type=int, default=79)
     parser.add_argument("--num_labels", type=int, default=14)
-    parser.add_argument("--latent_dim", type=int, default=100)
+    parser.add_argument("--latent_dim", type=int, default=128)
     parser.add_argument("--condition_size", type=int, default=34)
     parser.add_argument("--condition_latent_dim", type=int, default=25)
     parser.add_argument("--G_train_freq", type=int, default=1)
     parser.add_argument("--log_freq", type=int, default=100, help="Write logs to commandline every n steps.")
     parser.add_argument("--log_tensorboard_freq", type=int,
-                        default=100, help="Write logs to TensorBoard every n steps.")
+                        default=1000, help="Write logs to TensorBoard every n steps.")
     parser.add_argument("--eval_freq", type=int, default=1, help="Evaluate model every n epochs.")
     parser.add_argument("--save_freq", type=int, default=1, help="Save model every n epochs.")
+    parser.add_argument("--seed", type=int, help="Seed to set. If not passed, not seed it set.")
     # float args
     parser.add_argument("--lr", type=float, default=0.0002)
     parser.add_argument("--clip_val", type=float, default=0.1, help="Gradient clipping. Only used in WGAN.")
@@ -108,6 +112,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(f"Args: {args}")
 
+    utils.set_seeds(args.seed)
     model_name = get_model_name(args)
     log_dir = args.log_dir + "/" + model_name
     model_save_dir = args.model_save_dir + "/" + model_name
@@ -173,7 +178,7 @@ if __name__ == '__main__':
                         G_train_freq=args.G_train_freq,
                         condition_vector_dict=condition_vector_dict if args.use_condition_vectors else None)
 
-        if epoch % args.save_freq == 0:
+        if args.model_save_dir and (epoch% args.save_freq == 0 or epoch == args.n_epochs - 1):
             gan.save_model(epoch)
 
     gan.logger.add_all_custom_scalars()
