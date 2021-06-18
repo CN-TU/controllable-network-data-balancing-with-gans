@@ -34,11 +34,17 @@ def get_model_name(args):
         model_name = "acgan"
     else:
         model_name = "cgan"
-    return model_name + "_with_condition_vector" if args.use_condition_vectors else model_name
+
+    if args.use_static_condition_vectors:
+        model_name += "_with_static_condition_vector"
+    elif args.use_dynamic_condition_vectors:
+        model_name += "_with_dynamic_condition_vector"
+
+    return model_name
 
 
 def make_generator_and_discriminator(device, args):
-    if args.use_condition_vectors:
+    if args.use_static_condition_vectors or args.use_dynamic_condition_vectors:
         G = GeneratorWithCondition(args.num_features, args.num_labels, args.condition_size,
                                    latent_dim=args.latent_dim,
                                    condition_latent_dim=args.condition_latent_dim).to(device)
@@ -77,7 +83,7 @@ if __name__ == '__main__':
     parser.add_argument("--num_features", type=int, default=79)
     parser.add_argument("--num_labels", type=int, default=14)
     parser.add_argument("--latent_dim", type=int, default=128)
-    parser.add_argument("--condition_size", type=int, default=34)
+    parser.add_argument("--condition_size", type=int, default=25)
     parser.add_argument("--condition_latent_dim", type=int, default=25)
     parser.add_argument("--G_train_freq", type=int, default=1)
     parser.add_argument("--log_freq", type=int, default=100, help="Write logs to commandline every n steps.")
@@ -98,8 +104,11 @@ if __name__ == '__main__':
     parser.add_argument("--compute_euclidean_distances", action="store_true")
     parser.add_argument("--use_label_weights", action="store_true",
                         help="Indicates if label weights should be used in generation procedure.")
-    parser.add_argument("--use_condition_vectors", action="store_true",
-                        help="Indicates whether the precomputed condition vector should be used instead of the "
+    parser.add_argument("--use_static_condition_vectors", action="store_true",
+                        help="Indicates whether the precomputed static condition vector should be used instead of the "
+                             "attack labels.")
+    parser.add_argument("--use_dynamic_condition_vectors", action="store_true",
+                        help="Indicates whether the precomputed dynamic condition vector should be used instead of the "
                              "attack labels.")
     parser.add_argument("--use_wandb", action="store_true",
                         help="Indicates if logs should be written to Weights & Biases in addition to TensorBoard.")
@@ -119,8 +128,19 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu")
 
     print("Loading dataset...")
-    train_dataset = CIC17Dataset(args.data_path + "train_dataset_scaled.pt", is_scaled=True)
-    test_dataset = CIC17Dataset(args.data_path + "test_dataset_scaled.pt", is_scaled=True)
+    train_dataset = CIC17Dataset(
+        args.data_path + "train_dataset_scaled.pt",
+        is_scaled=True,
+        use_static_condition_vectors=args.use_static_condition_vectors,
+        use_dynamic_condition_vectors=args.use_dynamic_condition_vectors
+    )
+    test_dataset = CIC17Dataset(
+        args.data_path + "test_dataset_scaled.pt",
+        is_scaled=True,
+        is_test=True,
+        use_static_condition_vectors=args.use_static_condition_vectors,
+        use_dynamic_condition_vectors=args.use_dynamic_condition_vectors
+    )
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
                                    num_workers=args.num_cpu, pin_memory=True)
     test_loader = data.DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.num_cpu)
@@ -137,16 +157,41 @@ if __name__ == '__main__':
     G_optimizer, D_optimizer = make_optimizer(G, D, args)
 
     if args.use_wgan:
-        gan = CWGAN(G, D, G_optimizer, D_optimizer,
-                    use_gradient_penalty=args.use_gp, use_auxiliary_classifier=args.use_auxiliary_classifier,
-                    model_save_dir=model_save_dir, log_dir=log_dir, clip_val=args.clip_val, device=device,
-                    use_wandb=args.use_wandb)
+        gan = CWGAN(
+            G, D, G_optimizer, D_optimizer,
+            model_save_dir=model_save_dir,
+            log_dir=log_dir,
+            clip_val=args.clip_val,
+            use_gradient_penalty=args.use_gp,
+            use_auxiliary_classifier=args.use_auxiliary_classifier,
+            use_wandb=args.use_wandb,
+            use_static_condition_vectors=args.use_static_condition_vectors,
+            use_dynamic_condition_vectors=args.use_dynamic_condition_vectors,
+            condition_vector_dict=condition_vector_dict,
+            device=device
+        )
     elif args.use_acgan:
-        gan = ACGAN(G, D, G_optimizer, D_optimizer, model_save_dir=model_save_dir,
-                    log_dir=log_dir, device=device, use_wandb=args.use_wandb)
+        gan = ACGAN(
+            G, D, G_optimizer, D_optimizer,
+            model_save_dir=model_save_dir,
+            log_dir=log_dir,
+            use_wandb=args.use_wandb,
+            use_static_condition_vectors=args.use_static_condition_vectors,
+            use_dynamic_condition_vectors=args.use_dynamic_condition_vectors,
+            condition_vector_dict=condition_vector_dict,
+            device=device
+        )
     else:
-        gan = CGAN(G, D, G_optimizer, D_optimizer, model_save_dir=model_save_dir,
-                   log_dir=log_dir, device=device, use_wandb=args.use_wandb)
+        gan = CGAN(
+            G, D, G_optimizer, D_optimizer,
+            model_save_dir=model_save_dir,
+            log_dir=log_dir,
+            device=device,
+            use_wandb=args.use_wandb,
+            use_static_condition_vectors=args.use_static_condition_vectors,
+            use_dynamic_condition_vectors=args.use_dynamic_condition_vectors,
+            condition_vector_dict=condition_vector_dict
+        )
 
     print("Generator:\n", G)
     print("Discriminator:\n", D)
@@ -165,20 +210,29 @@ if __name__ == '__main__':
     for epoch in range(args.n_epochs):
 
         if epoch % args.eval_freq == 0:
-            gan.evaluate(test_dataset, cols_to_plot, epoch,
-                         label_weights=label_weights, classifier=classifier, label_encoder=test_dataset.label_encoder,
-                         scaler=test_dataset.scaler, class_means=test_dataset.class_means,
-                         significance_test=args.significance_test,
-                         compute_euclidean_distances=args.compute_euclidean_distances,
-                         condition_vector_dict=condition_vector_dict if args.use_condition_vectors else None)
+            gan.evaluate(
+                test_dataset,
+                cols_to_plot,
+                epoch,
+                label_weights=label_weights,
+                classifier=classifier,
+                label_encoder=test_dataset.label_encoder,
+                scaler=test_dataset.scaler,
+                class_means=test_dataset.class_means,
+                significance_test=args.significance_test,
+                compute_euclidean_distances=args.compute_euclidean_distances
+            )
 
-        gan.train_epoch(train_loader, epoch, log_freq=args.log_freq,
-                        log_tensorboard_freq=args.log_tensorboard_freq,
-                        label_weights=label_weights if args.use_label_weights else None,
-                        G_train_freq=args.G_train_freq,
-                        condition_vector_dict=condition_vector_dict if args.use_condition_vectors else None)
+        gan.train_epoch(
+            train_loader,
+            epoch,
+            log_freq=args.log_freq,
+            log_tensorboard_freq=args.log_tensorboard_freq,
+            label_weights=label_weights if args.use_label_weights else None,
+            G_train_freq=args.G_train_freq
+        )
 
-        if args.model_save_dir and (epoch% args.save_freq == 0 or epoch == args.n_epochs - 1):
+        if args.model_save_dir and (epoch % args.save_freq == 0 or epoch == args.n_epochs - 1):
             gan.save_model(epoch)
 
     gan.logger.add_all_custom_scalars()

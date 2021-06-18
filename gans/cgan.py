@@ -4,7 +4,9 @@ from .base_gan import BaseGAN
 
 class CGAN(BaseGAN):
 
-    def __init__(self, G, D, G_optimizer, D_optimizer, use_wandb=False, model_save_dir=None, log_dir=None, device=None):
+    def __init__(self, G, D, G_optimizer, D_optimizer, use_wandb=False,
+                 use_static_condition_vectors=False, use_dynamic_condition_vectors=False,
+                 model_save_dir=None, log_dir=None, device=None, condition_vector_dict=None):
         """
         Implements the conditional GAN (cGAN) architecture.
         Paper:
@@ -21,11 +23,12 @@ class CGAN(BaseGAN):
             use_wandb: Bool. Indicates whether Weights & Biases model tracking should be used.
 
         """
-        super().__init__(G, D, G_optimizer, D_optimizer, use_wandb, model_save_dir, log_dir, device)
+        super().__init__(G, D, G_optimizer, D_optimizer,
+                         use_wandb, use_static_condition_vectors, use_dynamic_condition_vectors,
+                         model_save_dir, log_dir, device, condition_vector_dict)
         self.criterion = torch.nn.BCEWithLogitsLoss().to(self.device)
 
-    def _train_epoch(self, features, labels, step, G_train_freq=1,
-                     label_weights=None, condition_vectors=None, condition_vector_dict=None):
+    def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None, condition_vectors=None):
         """
         Fits GAN. Is called by train_epoch() method.
         Args:
@@ -43,7 +46,6 @@ class CGAN(BaseGAN):
         noise, noise_labels, noise_condition_vectors = self.make_noise_and_labels(
             batch_size,
             label_weights,
-            condition_vector_dict
         )
         generated_features, G_stats = self.fit_generator(
             noise,

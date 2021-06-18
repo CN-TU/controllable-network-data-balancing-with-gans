@@ -24,7 +24,9 @@ from logger import Logger
 
 class BaseGAN:
 
-    def __init__(self, G, D, G_optimizer, D_optimizer, use_wandb=False, model_save_dir=None, log_dir=None, device=None):
+    def __init__(self, G, D, G_optimizer, D_optimizer, use_wandb=False,
+                 use_static_condition_vectors=False, use_dynamic_condition_vectors=False,
+                 model_save_dir=None, log_dir=None, device=None, condition_vector_dict=None):
         """
 
         Args:
@@ -36,7 +38,13 @@ class BaseGAN:
             log_dir: String. Directory path to log TensorBoard logs to.
             device: torch.device. Either cpu or gpu device.
             use_wandb: Bool. Indicates whether Weights & Biases model tracking should be used.
+            use_static_condition_vectors: Bool. Indicates whether static condition vectors should be used.
+            use_dynamic_condition_vectors: Boo. Indicates whether dynamic condition vectors should be used.
+            condition_vector_dict: Dict. Used for constructing static condition vectors.
         """
+        assert not (use_static_condition_vectors and use_dynamic_condition_vectors)
+        if use_static_condition_vectors:
+            assert condition_vector_dict is not None
         self.G, self.D = G, D
         self.G_optimizer, self.D_optimizer = G_optimizer, D_optimizer
         self.latent_dim, self.num_labels = self.G.latent_dim, self.G.num_labels
@@ -47,6 +55,9 @@ class BaseGAN:
         self.model_save_dir = model_save_dir
         self.log_dir = log_dir
         self.use_wandb = use_wandb
+        self.condition_vector_dict = condition_vector_dict
+        self.use_static_condition_vectors = use_static_condition_vectors
+        self.use_dynamic_condition_vectors = use_dynamic_condition_vectors
         time = datetime.now().strftime("%d-%m-%Y_%Hh%Mm")
         if self.model_save_dir:
             self.model_save_dir = Path(model_save_dir) / time
@@ -60,8 +71,7 @@ class BaseGAN:
             if self.use_wandb:
                 self.logger.watch_wandb(self.G, self.D)
 
-    def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, G_train_freq=1,
-                    label_weights=None, condition_vector_dict=None):
+    def train_epoch(self, train_loader, epoch, log_freq=50, log_tensorboard_freq=1, G_train_freq=1, label_weights=None):
         """
         Runs a single training epoch.
 
@@ -71,23 +81,20 @@ class BaseGAN:
             log_freq: Int. Determines the logging frequency for commandline outputs.
             log_tensorboard_freq: Int. Determines the logging frequency of TensorBoard logs.
             label_weights: None or List. Weights used for random generation of fake labels.
-            condition_vector_dict: Dict. If given, the custom condition vectors are used instead of the label condition.
-
         """
         total_steps = len(train_loader)
         running_stats = {"G_loss": 0, "D_loss": 0, "D_loss_fake": 0, "D_loss_real": 0}
         with tqdm(total=total_steps, desc="Train loop") as pbar:
-            for step, (features, labels) in enumerate(train_loader):
+            for step, (features, labels, condition_vectors) in enumerate(train_loader):
                 features = features.to(self.device)
-                if condition_vector_dict:
-                    # TODO: converting to numpy is costly, better add condition vector to dataset at creation
-                    condition_vectors = self.make_condition_vectors(labels.numpy(), condition_vector_dict)
                 labels = labels.to(self.device)
+                if self.use_static_condition_vectors or self.use_dynamic_condition_vectors:
+                    condition_vectors = condition_vectors.float().to(self.device)
+                else:
+                    condition_vectors = None
 
                 # update params
-                stats = self._train_epoch(features, labels, step, G_train_freq, label_weights,
-                                          condition_vectors if condition_vector_dict else None,
-                                          condition_vector_dict)
+                stats = self._train_epoch(features, labels, step, G_train_freq, label_weights, condition_vectors)
 
                 # logging
                 running_stats = {k: v + stats[k] for k, v in running_stats.items() if k in stats}
@@ -107,15 +114,13 @@ class BaseGAN:
             stats_epoch = {"GAN_losses_epoch/" + k: v / total_steps for k, v in running_stats.items()}
             self.logger.log_to_tensorboard(stats_epoch, epoch, 0, 1)
 
-    def _train_epoch(self, features, labels, step, G_train_freq=1,
-                     label_weights=None, condition_vectors=None, condition_vector_dict=None):
+    def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None, condition_vectors=None):
         raise NotImplementedError()
 
     def evaluate(self, dataset, cols_to_plot, step,
                  num_samples=1024, label_weights=None, classifier=None,
                  scaler=None, label_encoder=None, class_means=None,
-                 significance_test=None, compute_euclidean_distances=False,
-                 condition_vector_dict=None):
+                 significance_test=None, compute_euclidean_distances=False):
         """
         Evaluates the generated features:
             - Compares generated feature distributions with actual distributions of the given test set.
@@ -139,12 +144,10 @@ class BaseGAN:
             significance_test: Str or None. If given, indicates what significance test should be run.
             compute_euclidean_distances: Bool. Indicates whether euclidean distances between generated features and mean
                     flow of entire dataset should be computed per class.
-            condition_vector_dict: Dict. If given, the custom condition vectors are used instead of the label condition.
         """
         self.set_mode("eval")
         col_to_idx = {col: i for i, col in enumerate(dataset.column_names)}
-        generated_features, labels, _ = self.generate(num_samples, label_weights=label_weights,
-                                                      condition_vector_dict=condition_vector_dict)
+        generated_features, labels, _ = self.generate(num_samples, label_weights=label_weights)
         generated_features = generated_features.cpu()
         labels = labels.cpu()
 
@@ -196,8 +199,7 @@ class BaseGAN:
             distance_by_class = {"Distance_measures/" + k: v for k, v in distance_by_class.items()}
             self.logger.log_to_tensorboard(distance_by_class, step, 0, 1)
 
-    def generate(self, num_samples=1024, label_weights=None,
-                 scaler=None, label_encoder=None, condition_vector_dict=None):
+    def generate(self, num_samples=1024, label_weights=None, scaler=None, label_encoder=None):
         """
         Generates the given number of fake flows.
 
@@ -206,7 +208,6 @@ class BaseGAN:
             label_weights: None or List. Weights used for random generation of fake labels.
             scaler: sklearn model.
             label_encoder: sklearn model.
-            condition_vector_dict: Dict. If given, the custom condition vectors are used instead of the label condition.
 
         Returns: torch.Tensor of generated samples, torch.Tensor of generated labels,
                  (optionally) torch.Tensor of condition vectors
@@ -214,26 +215,32 @@ class BaseGAN:
         """
         self.set_mode("eval")
         with torch.no_grad():
-            noise, labels, condition_vectors = self.make_noise_and_labels(num_samples, label_weights,
-                                                                          condition_vector_dict)
-            generated_features = self.G(noise, labels if condition_vectors is None else condition_vectors)
+            noise, labels, condition_vectors = self.make_noise_and_labels(num_samples, label_weights)
+            if self.use_static_condition_vectors:
+                generated_features = self.G(noise, condition_vectors)
+            elif self.use_dynamic_condition_vectors:
+                # TODO: maybe adjust for labels
+                generated_features = self.G(noise, condition_vectors)
+            else:
+                generated_features = self.G(noise, labels)
 
         if scaler:
             generated_features = scaler.inverse_transform(generated_features)
         if label_encoder:
             labels = label_encoder.inverse_transform(labels)
-        if condition_vector_dict:
-            return generated_features, labels, condition_vectors
-        return generated_features, labels, None
 
-    def make_noise_and_labels(self, num_samples, label_weights=None, condition_vector_dict=None):
+        return generated_features, labels, condition_vectors
+
+    def make_noise_and_labels(self, num_samples, label_weights=None):
         noise = self.make_noise(num_samples)
         # make raw labels np.array, to avoid converting back for condition vector
         raw_labels = self.make_labels(num_samples, label_weights)
         noise_labels = torch.LongTensor(raw_labels).to(self.device)
         condition_vectors = None
-        if condition_vector_dict:
-            condition_vectors = self.make_condition_vectors(raw_labels, condition_vector_dict)
+        if self.use_static_condition_vectors:
+            condition_vectors = self.make_static_condition_vectors(raw_labels)
+        elif self.use_dynamic_condition_vectors:
+            condition_vectors = self.make_dynamic_condition_vectors(raw_labels)
         return noise, noise_labels, condition_vectors
 
     def make_noise(self, num_samples):
@@ -242,11 +249,31 @@ class BaseGAN:
     def make_labels(self, num_samples, label_weights):
         return np.random.choice(np.arange(0, self.num_labels), num_samples, p=label_weights)
 
-    def make_condition_vectors(self, labels, condition_vector_dict):
+    def make_static_condition_vectors(self, labels):
         condition_vectors = []
         for label in labels:
+            # TODO: fix port usage
             # condition_vectors.append(condition_vector_dict[label])
-            condition_vectors.append(condition_vector_dict[label][1:])
+            condition_vectors.append(self.condition_vector_dict[label][1:])
+        return torch.Tensor(condition_vectors).to(self.device)
+
+    def make_dynamic_condition_vectors(self, labels):
+        # this is slow unfortunately
+        condition_vector_features = utils.get_condition_vector_names()
+        condition_vectors = []
+        for label in labels:
+            vector = []
+            for feature in condition_vector_features:
+                if feature == "Destination Port":
+                    # vector.append(self.condition_vector_dict[label][0])
+                    continue
+                elif "Flag" in feature:
+                    # either 0 or 1
+                    vector.append(np.random.randint(0, 2))
+                else:
+                    # random one hot vector with three levels (low/mid/high)
+                    vector += np.eye(3)[np.random.choice(3)].tolist()
+            condition_vectors.append(vector)
         return torch.Tensor(condition_vectors).to(self.device)
 
     def save_model(self, epoch):

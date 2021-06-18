@@ -2,12 +2,13 @@ import pandas as pd
 import torch
 import joblib
 import numpy as np
+import collections
 
 from pathlib import Path
-from collections import Counter
 from torch.utils import data
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from sklearn.model_selection import train_test_split
+import utils
 
 
 def load_and_preprocess_dataset(data_folder_path, keep_benign=False):
@@ -81,7 +82,7 @@ def get_linear_vector(df, df_means, label, feature, steps=3):
 
 def get_percentile_vector(df, df_means, label, feature):
     """
-    Get percentile interval for a given feature of a given class feature (35%-median and 65%).
+    Get percentile interval for a given feature of a given class feature (33%-median and 66%).
 
     Args:
         df: pd.DataFrame. Complete Dataframe.
@@ -90,7 +91,7 @@ def get_percentile_vector(df, df_means, label, feature):
         feature: Str. Feature column.
 
     """
-    t1, t2 = df[feature].quantile(0.35), df[feature].quantile(0.65)
+    t1, t2 = df[feature].quantile(0.33), df[feature].quantile(0.66)
     rep = [int(df_means[feature][label] < t1),
            int(t1 < df_means[feature][label] < t2),
            int(df_means[feature][label] > t2)]
@@ -110,29 +111,62 @@ def compute_static_condition_vectors(df, df_means, relevant_features, vector_typ
 
     """
     df_mean_condition = df_means[relevant_features]
-    representations, levels = {}, {}
+    representations, levels = collections.defaultdict(list), collections.defaultdict(list)
     for attack in df_mean_condition.index:
-        # We cannot just use the real Port number, as it will be of a different scale than all other inputs.
-        port = int(df_mean_condition['Destination Port'][attack])
-        representations[attack] = [[port]]
-        levels[attack] = [port]
-        for feature in relevant_features[1:]:  # ignore destination port
-            if vector_type == "percentile":
-                level, representation = get_percentile_vector(df, df_mean_condition, attack, feature)
-            elif vector_type == "linear":
-                level, representation = get_linear_vector(df, df_mean_condition, attack, feature)
+        for feature in relevant_features:
+            if feature in ['Destination Port', 'PSH Flag Count', 'SYN Flag Count', 'RST Flag Count', 'ACK Flag Count']:
+                val = int(df_mean_condition[feature][attack])
+                representations[attack].append([val])
+                levels[attack].append(val)
             else:
-                raise ValueError("Supported vector types are ['percentile', 'linear']")
-            representations[attack].append(representation)
-            levels[attack].append(level)
+                if vector_type == "percentile":
+                    level, representation = get_percentile_vector(df, df_mean_condition, attack, feature)
+                elif vector_type == "linear":
+                    level, representation = get_linear_vector(df, df_mean_condition, attack, feature)
+                else:
+                    raise ValueError("Supported vector types are ['percentile', 'linear']")
+                representations[attack].append(representation)
+                levels[attack].append(level)
         # flatten representation
         representations[attack] = [val for rep in representations[attack] for val in rep]
     return representations, levels
 
 
+def compute_dynamic_condition_vectors(df, relevant_features, quantiles=(0.33, 0.66)):
+    """
+    Computes the condition vectors for each flow individually.
+
+    Args:
+        df: pd.DataFrame. The complete (or train/test slice) dataset.
+        relevant_features: List. Features to use.
+        quantiles: Tuple. Contains the values for first and second quantile. By default 33 and 66the percentile,
+                   such that it is split into 3 equi-sized buckets.
+
+    Returns: np.array. The condition vectors.
+    """
+    flag_cols = [col for col in relevant_features if "Flag" in col]
+    cols_to_dummy = [col for col in relevant_features if col not in flag_cols and col != "Destination Port"]
+    df_condition = df[relevant_features]
+
+    # compute bucket for each feature based on quantile values
+    quantiles = [0, *quantiles, 1.0]
+    df_condition.loc[:, cols_to_dummy] = df_condition.loc[:, cols_to_dummy].apply(
+        lambda x: pd.qcut(x, q=quantiles, labels=False)
+    )
+
+    # turn bucket values in one-hot encoded features (except for port and flag columns)
+    df_condition = pd.get_dummies(df_condition, columns=cols_to_dummy)
+
+    # reorder cols (.get_dummies() appends to the end)
+    reorder_cols = [col for col in df_condition.columns if col not in flag_cols] + flag_cols
+    df_condition = df_condition[reorder_cols]
+    return df_condition.values
+
+
 def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_splits",
                               test_size=0.05, seed=0, stratify=False, scale=False, keep_benign=False,
-                              write_class_means=False, write_static_condition_vectors=False):
+                              write_class_means=False, write_static_condition_vectors=False,
+                              write_dynamic_condition_vectors=False):
     """
     Generate a train-test-split of the CIC-IDS dataset:
         - loads and preprocess dataset
@@ -141,6 +175,10 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
         - scales the numeric columns in the dataframe using MinMaxScaler
         - split df into train and test set given `test_size` and `seed`.
         - saves the generate split + class array to `write_path`
+        - (optionally) keeps benign flows
+        - (optionally) saves the class means
+        - (optionally) saves the static condition vectors
+        - (optionally) saves the dynamic condition vectors.
 
     Args:
         data_folder_path: String. Folder path where .csv files reside.
@@ -152,16 +190,15 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
         keep_benign: Bool.
         write_class_means: Bool.
         write_static_condition_vectors: Bool. Only executed if write_class_means is True and scale is False.
+            This saves a dictionary containing for each class a static vector representation constructed from
+            a selection of features in the dataset. For each selected feature, we compute if the value lies in
+            the low/mid/high quantile. The result is a 3-dim vector per features. We encode 11 features this way,
+            and also add the port, resulting in a 34-dim vector per class.
+        write_dynamic_condition_vectors: Bool.
 
     """
-    labels = ['Bot', 'DDoS', 'DoS GoldenEye', 'DoS Hulk', 'DoS Slowhttptest', 'DoS slowloris',
-              'FTP-Patator', 'Heartbleed', 'Infiltration', 'PortScan', 'SSH-Patator', 'Web Attack \x96 Brute Force',
-              'Web Attack \x96 Sql Injection', 'Web Attack \x96 XSS', 'zBENIGN']
-
-    # as defined by Fares
-    condition_vector_features = ['Destination Port', 'Flow Duration', 'Total Backward Packets', 'Total Fwd Packets',
-                                 'Packet Length Mean', 'Flow Bytes/s', 'Flow IAT Min', 'Flow IAT Max', 'PSH Flag Count',
-                                 'SYN Flag Count', 'RST Flag Count', 'ACK Flag Count']
+    labels = utils.get_label_names()
+    condition_vector_features = utils.get_condition_vector_names()
 
     write_path = Path(write_path) / f"seed_{seed}"
     if not write_path.exists():
@@ -206,17 +243,38 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
         df_reconstruct = pd.DataFrame(np.append(X, y.reshape(-1, 1), axis=1), columns=df.columns)
         df_mean = df_reconstruct.groupby("Label").mean()
         torch.save(df_mean, write_path / f"class_means{suffix}.pt")
-        if write_static_condition_vectors and not scale:
+        if write_static_condition_vectors:
+            assert not scale
             representations, levels = compute_static_condition_vectors(df_reconstruct, df_mean,
                                                                        condition_vector_features)
             torch.save(representations, write_path / f"static_condition_vectors.pt")
             torch.save(levels, write_path / f"static_condition_levels.pt")
             torch.save(condition_vector_features, write_path / f"condition_vector_names.pt")
 
+    if write_dynamic_condition_vectors:
+        assert not scale
+        df_train_reconstruct = pd.DataFrame(np.append(X_train, y_train.reshape(-1, 1), axis=1), columns=df.columns)
+        df_test_reconstruct = pd.DataFrame(np.append(X_test, y_test.reshape(-1, 1), axis=1), columns=df.columns)
+        train_dynamic_condition_vectors = compute_dynamic_condition_vectors(
+            df_train_reconstruct,
+            condition_vector_features,
+        )
+        test_dynamic_condition_vectors = compute_dynamic_condition_vectors(
+            df_test_reconstruct,
+            condition_vector_features,
+
+        )
+        torch.save(train_dynamic_condition_vectors,  write_path / f"train_dynamic_condition_vectors.pt")
+        torch.save(test_dynamic_condition_vectors,  write_path / f"test_dynamic_condition_vectors.pt")
+
 
 class CIC17Dataset(data.Dataset):
 
-    def __init__(self, file_path, is_scaled=False):
+    def __init__(self, file_path, is_scaled=False,
+                 use_static_condition_vectors=False,
+                 use_dynamic_condition_vectors=False,
+                 is_test=False):
+        assert not (use_static_condition_vectors and use_dynamic_condition_vectors)
         folder_path = Path(file_path).parent
         dataset = torch.load(file_path)
         self.X = dataset["features"]
@@ -227,6 +285,11 @@ class CIC17Dataset(data.Dataset):
         self.static_condition_vectors = torch.load(folder_path / "static_condition_vectors.pt")
         self.static_condition_levels = torch.load(folder_path / "static_condition_levels.pt")
         self.condition_vector_names = torch.load(folder_path / "condition_vector_names.pt")
+        self.dynamic_condition_vectors = torch.load(
+            folder_path / f"{'test' if is_test else 'train'}_dynamic_condition_vectors.pt"
+        )
+        self.use_static_condition_vectors = use_static_condition_vectors
+        self.use_dynamic_condition_vectors = use_dynamic_condition_vectors
         if is_scaled:
             self.scaler = joblib.load(folder_path / "min_max_scaler.gz")
             self.class_means = torch.load(folder_path / "class_means_scaled.pt")
@@ -237,28 +300,46 @@ class CIC17Dataset(data.Dataset):
         return len(self.y)
 
     def __getitem__(self, idx):
-        return [self.X[idx], self.y[idx]]
+        label = self.y[idx]
+        # torch.Dataset cannot handle 'None' values, hence just empty list
+        condition_vector = []
+        if self.use_static_condition_vectors:
+            # TODO: handle port correctly
+            # condition_vector = torch.Tensor(self.static_condition_vectors[label])
+            condition_vector = torch.Tensor(self.static_condition_vectors[label][1:])
+        elif self.use_dynamic_condition_vectors:
+            # condition_vector = self.dynamic_condition_vectors[idx]
+            condition_vector = self.dynamic_condition_vectors[idx][1:]
+        return [self.X[idx], label, condition_vector]
 
 
 if __name__ == '__main__':
     # --------------------------------- Data generation  ---------------------------------
+
+    # # unscaled dataset
     # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
-    #                           stratify=True, scale=False, write_class_means=True, write_static_condition_vectors=True)
+    #                           stratify=True, scale=False, write_class_means=True,
+    #                           write_static_condition_vectors=True, write_dynamic_condition_vectors=True)
+    #
+    # # scaled dataset
     # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
     #                           stratify=True, scale=True, write_class_means=True)
+    #
+    # # only required for training the classifier
     # generate_train_test_split("./data/cic-ids-2017/TrafficLabelling",
     #                           write_path="./data/cic-ids-2017_splits_with_benign",
     #                           stratify=True, scale=False, keep_benign=True, write_class_means=True)
 
-    # --------------------------------- Sanity checks  ---------------------------------
+    # ---------------------------------  Sanity checks  ----------------------------------
+
     train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/train_dataset_scaled.pt", is_scaled=True)
     test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/test_dataset_scaled.pt", is_scaled=True)
 
     #  1. Label distribution checks
     print(len(train_dataset))  # 528728
     print(len(test_dataset))  # 27828
-    train_label_counts = Counter(train_dataset.y)
-    test_label_counts = Counter(test_dataset.y)
+    train_label_counts = collections.Counter(train_dataset.y)
+    test_label_counts = collections.Counter(test_dataset.y)
     print({label: round(count / len(train_dataset), 5) for label, count in train_label_counts.most_common()})
     print({label: round(count / len(test_dataset), 5) for label, count in test_label_counts.most_common()})
     # {3: 0.41348, 9: 0.28533, 1: 0.23003, 2: 0.01849, 6: 0.01426, 10: 0.0106, 5: 0.01041, 4: 0.00988, 0: 0.00351,
@@ -289,8 +370,10 @@ if __name__ == '__main__':
     # tiny numeric differences are expected
     print("All close: ", np.allclose(X_unscaled, train_dataset_unscaled.X))
 
-    # 5. validate condition vectors
-    import collections
+    # 5. validate static condition vectors
+    train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/train_dataset_scaled.pt", is_scaled=True,
+                                 use_static_condition_vectors=True)
+
     print(train_dataset.class_names, train_dataset.condition_vector_names)
     print(train_dataset.static_condition_vectors, train_dataset.static_condition_levels)
     levels, levels_without_port = collections.defaultdict(list), collections.defaultdict(list)
@@ -301,3 +384,11 @@ if __name__ == '__main__':
     # 'DoS GoldenEye' 'DoS Hulk' have duplicate representations, unfortunately.
     print(levels)
     print(levels_without_port)
+
+    # 6. validate dynamic condition vectors
+    train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/train_dataset_scaled.pt", is_scaled=True,
+                                 use_dynamic_condition_vectors=True)
+    test_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/test_dataset_scaled.pt", is_scaled=True,
+                                use_dynamic_condition_vectors=True, is_test=True)
+    print(train_dataset.dynamic_condition_vectors)
+    print(test_dataset.dynamic_condition_vectors)

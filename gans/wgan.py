@@ -6,8 +6,9 @@ from .base_gan import BaseGAN
 class CWGAN(BaseGAN):
 
     def __init__(self, G, D, G_optimizer, D_optimizer, clip_val=0.1, lambda_gp=10, lambda_auxiliary=1,
-                 use_gradient_penalty=False, use_auxiliary_classifier=False, use_wandb=False,
-                 model_save_dir=None, log_dir=None, device=None):
+                 use_gradient_penalty=False, use_auxiliary_classifier=False,
+                 use_wandb=False, use_static_condition_vectors=False, use_dynamic_condition_vectors=False,
+                 model_save_dir=None, log_dir=None, device=None, condition_vector_dict=None):
         """
         Implements the conditional Wasserstein-GAN (WGAN),
         conditional WGAN with gradient penalty (WGAN-GP),
@@ -31,7 +32,9 @@ class CWGAN(BaseGAN):
             use_wandb: Bool. Indicates whether Weights & Biases model tracking should be used.
 
         """
-        super().__init__(G, D, G_optimizer, D_optimizer, use_wandb, model_save_dir, log_dir, device)
+        super().__init__(G, D, G_optimizer, D_optimizer,
+                         use_wandb, use_static_condition_vectors, use_dynamic_condition_vectors,
+                         model_save_dir, log_dir, device, condition_vector_dict)
         self.use_gradient_penalty = use_gradient_penalty
         self.clip_val = clip_val
         self.lambda_gp = lambda_gp
@@ -39,15 +42,10 @@ class CWGAN(BaseGAN):
         self.auxiliary_loss = torch.nn.CrossEntropyLoss().to(self.device)
         self.lambda_auxiliary = lambda_auxiliary
 
-    def _train_epoch(self, features, labels, step, G_train_freq=5,
-                     label_weights=None, condition_vectors=None, condition_vector_dict=None):
+    def _train_epoch(self, features, labels, step, G_train_freq=5, label_weights=None, condition_vectors=None):
         self.set_mode("train")
         batch_size = features.shape[0]
-        noise, noise_labels, noise_condition_vectors = self.make_noise_and_labels(
-            batch_size,
-            label_weights,
-            condition_vector_dict
-        )
+        noise, noise_labels, noise_condition_vectors = self.make_noise_and_labels(batch_size, label_weights)
         generated_features = self.G(noise, noise_labels if noise_condition_vectors is None else noise_condition_vectors)
 
         # train discriminator
@@ -61,8 +59,7 @@ class CWGAN(BaseGAN):
         # train generator
         G_stats = dict()
         if step % G_train_freq == 0:
-            noise, noise_labels, noise_condition_vectors = self.make_noise_and_labels(batch_size, label_weights,
-                                                                                      condition_vector_dict)
+            noise, noise_labels, noise_condition_vectors = self.make_noise_and_labels(batch_size, label_weights)
             generated_features, noise_labels, G_stats = self.fit_generator(
                 noise,
                 noise_labels if noise_condition_vectors is None else noise_condition_vectors
@@ -161,3 +158,5 @@ class CWGAN(BaseGAN):
                                     gradients.view(-1, features.size(1)).norm(2, dim=1) - 1
                             ) ** 2).mean()
         return gradient_penalty
+
+

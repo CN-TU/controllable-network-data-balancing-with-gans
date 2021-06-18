@@ -5,6 +5,22 @@ import numpy as np
 import pandas as pd
 
 
+def get_label_names():
+    return ['Bot', 'DDoS', 'DoS GoldenEye', 'DoS Hulk', 'DoS Slowhttptest', 'DoS slowloris',
+              'FTP-Patator', 'Heartbleed', 'Infiltration', 'PortScan', 'SSH-Patator', 'Web Attack \x96 Brute Force',
+              'Web Attack \x96 Sql Injection', 'Web Attack \x96 XSS', 'zBENIGN']
+
+
+def get_condition_vector_names():
+    # as defined by Fares
+    # For Flags it does not make sense to compute quantiles actually (they are 0, 1) just add them to the vector
+    condition_vector_features = ['Destination Port', 'Flow Duration', 'Total Backward Packets', 'Total Fwd Packets',
+                                 'Packet Length Mean', 'Flow Bytes/s', 'Flow IAT Min', 'Flow IAT Max', 'PSH Flag Count',
+                                 'SYN Flag Count', 'RST Flag Count', 'ACK Flag Count']
+    return condition_vector_features
+
+
+
 def run_significance_tests(real_features, real_labels, generated_features, generated_labels,
                            column_names, class_names, num_labels=14, alpha=0.05, test="ks"):
     """
@@ -92,7 +108,6 @@ def set_seeds(seed=None):
 
 
 if __name__ == "__main__":
-    import torch
     from networks import Generator, Discriminator
     from gans import CGAN
 

@@ -6,7 +6,8 @@ from .base_gan import BaseGAN
 class ACGAN(BaseGAN):
 
     def __init__(self, G, D, G_optimizer, D_optimizer, lambda_auxiliary=1.0,
-                 use_wandb=False, model_save_dir=None, log_dir=None, device=None):
+                 use_wandb=False, use_static_condition_vectors=False, use_dynamic_condition_vectors=False,
+                 model_save_dir=None, log_dir=None, device=None, condition_vector_dict=None):
         """
         Implements the Auxiliary classifier GAN (AC-GAN)
         Paper:
@@ -24,13 +25,14 @@ class ACGAN(BaseGAN):
             use_wandb: Bool. Indicates whether Weights & Biases model tracking should be used.
 
         """
-        super().__init__(G, D, G_optimizer, D_optimizer, use_wandb, model_save_dir, log_dir, device)
+        super().__init__(G, D, G_optimizer, D_optimizer,
+                         use_wandb, use_static_condition_vectors, use_dynamic_condition_vectors,
+                         model_save_dir, log_dir, device, condition_vector_dict)
         self.adversarial_loss = torch.nn.BCEWithLogitsLoss().to(self.device)
         self.auxiliary_loss = torch.nn.CrossEntropyLoss().to(self.device)
         self.lambda_auxiliary = lambda_auxiliary
 
-    def _train_epoch(self, features, labels, step, G_train_freq=1,
-                     label_weights=None, condition_vectors=None, condition_vector_dict=None):
+    def _train_epoch(self, features, labels, step, G_train_freq=1, label_weights=None, condition_vectors=None):
         self.set_mode("train")
         batch_size = features.shape[0]
         real = torch.FloatTensor(batch_size, 1).fill_(1.0).to(self.device)
