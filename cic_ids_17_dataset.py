@@ -159,8 +159,17 @@ def compute_dynamic_condition_vectors(df, relevant_features, quantiles=(0.33, 0.
 
     # reorder cols (.get_dummies() appends to the end)
     reorder_cols = [col for col in df_condition.columns if col not in flag_cols] + flag_cols
-    df_condition = df_condition[reorder_cols]
-    return df_condition.values
+    condition_vectors = df_condition[reorder_cols].values
+
+    return condition_vectors
+
+
+def compute_dynamic_condition_vector_dict(condition_vectors, labels, max_per_class=5000, num_labels=14):
+    condition_vector_dict = {}
+    for label in range(num_labels):
+        idx = np.where(labels == label)[0][:max_per_class]
+        condition_vector_dict[label] = condition_vectors[idx]
+    return condition_vector_dict
 
 
 def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_splits",
@@ -264,8 +273,14 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
             condition_vector_features,
 
         )
+        # we also want to construct the dynamic_condition_vector_dict --> e.g. 5000 condition vectors per class.
+        # y_train should be in the same order as train_dynamic_condition_vectors still
+        dynamic_condition_vector_dict = compute_dynamic_condition_vector_dict(train_dynamic_condition_vectors,
+                                                                              df_train_reconstruct.Label)
+
         torch.save(train_dynamic_condition_vectors,  write_path / f"train_dynamic_condition_vectors.pt")
         torch.save(test_dynamic_condition_vectors,  write_path / f"test_dynamic_condition_vectors.pt")
+        torch.save(dynamic_condition_vector_dict,  write_path / f"dynamic_condition_vector_dict.pt")
 
 
 class CIC17Dataset(data.Dataset):
@@ -288,6 +303,7 @@ class CIC17Dataset(data.Dataset):
         self.dynamic_condition_vectors = torch.load(
             folder_path / f"{'test' if is_test else 'train'}_dynamic_condition_vectors.pt"
         )
+        self.dynamic_condition_vector_dict = torch.load(folder_path / "dynamic_condition_vector_dict.pt")
         self.use_static_condition_vectors = use_static_condition_vectors
         self.use_dynamic_condition_vectors = use_dynamic_condition_vectors
         if is_scaled:
@@ -392,3 +408,9 @@ if __name__ == '__main__':
                                 use_dynamic_condition_vectors=True, is_test=True)
     print(train_dataset.dynamic_condition_vectors)
     print(test_dataset.dynamic_condition_vectors)
+    # dynamic condition vector dict
+    print(train_dataset.dynamic_condition_vector_dict)
+    for label, vectors in train_dataset.dynamic_condition_vector_dict.items():
+        print(label, vectors.shape)
+
+

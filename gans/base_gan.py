@@ -258,22 +258,30 @@ class BaseGAN:
         return torch.Tensor(condition_vectors).to(self.device)
 
     def make_dynamic_condition_vectors(self, labels):
-        # this is slow unfortunately
-        condition_vector_features = utils.get_condition_vector_names()
         condition_vectors = []
+        condition_vector_features = utils.get_condition_vector_names()
+
+        # #  old approach: randomly construct the condition vector
+        # for label in labels:
+        #     vector = []
+        #     for feature in condition_vector_features:
+        #         if feature == "Destination Port":
+        #             # vector.append(self.condition_vector_dict[label][0])
+        #             continue
+        #         elif "Flag" in feature:
+        #             # either 0 or 1
+        #             vector.append(np.random.randint(0, 2))
+        #         else:
+        #             # random one hot vector with three levels (low/mid/high)
+        #             vector += np.eye(3)[np.random.choice(3)].tolist()
+        #     condition_vectors.append(vector)
+
+        # new approach: use real condition vectors instead of randomly constructed ones
         for label in labels:
-            vector = []
-            for feature in condition_vector_features:
-                if feature == "Destination Port":
-                    # vector.append(self.condition_vector_dict[label][0])
-                    continue
-                elif "Flag" in feature:
-                    # either 0 or 1
-                    vector.append(np.random.randint(0, 2))
-                else:
-                    # random one hot vector with three levels (low/mid/high)
-                    vector += np.eye(3)[np.random.choice(3)].tolist()
-            condition_vectors.append(vector)
+            vectors = self.condition_vector_dict[label]
+            # selected = vectors[np.random.choice(vectors.shape[0])]
+            selected = vectors[np.random.choice(vectors.shape[0])][1:]
+            condition_vectors.append(selected)
         return torch.Tensor(condition_vectors).to(self.device)
 
     def save_model(self, epoch):

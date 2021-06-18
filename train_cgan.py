@@ -150,7 +150,12 @@ if __name__ == '__main__':
     label_distribution = {0: 0.01, 1: 0.23, 2: 0.02, 3: 0.38, 4: 0.01, 5: 0.01, 6: 0.015,
                           7: 0.01, 8: 0.01, 9: 0.265, 10: 0.01, 11: 0.01, 12: 0.01, 13: 0.01}
     label_weights = list(label_distribution.values())
-    condition_vector_dict = train_loader.dataset.static_condition_vectors
+
+    condition_vector_dict = None
+    if args.use_static_condition_vectors:
+        condition_vector_dict = train_loader.dataset.static_condition_vectors
+    elif args.use_dynamic_condition_vectors:
+        condition_vector_dict = train_loader.dataset.dynamic_condition_vector_dict
 
     print("Making GAN...")
     G, D = make_generator_and_discriminator(device, args)
