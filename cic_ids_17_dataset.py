@@ -98,6 +98,23 @@ def get_percentile_vector(df, df_means, label, feature):
     return np.argmax(rep), rep
 
 
+def convert_port_to_binary(port_num, width=16):
+    """
+    Converts port from integer to binary representation.
+    The max port number is an unsigned 16-bit integer, 65535:
+        https://stackoverflow.com/questions/113224/what-is-the-largest-tcp-ip-network-port-number-allowable-for-ipv4
+
+    Args:
+        port_num: Int.
+        width: Int. Number of bits.
+
+    Returns:
+
+    """
+    bits = np.binary_repr(int(port_num), width=width)
+    return [int(val) for val in bits]
+
+
 def compute_static_condition_vectors(df, df_means, relevant_features, vector_type="percentile"):
     """
     Constructs the condition vector per attack type.
@@ -114,10 +131,15 @@ def compute_static_condition_vectors(df, df_means, relevant_features, vector_typ
     representations, levels = collections.defaultdict(list), collections.defaultdict(list)
     for attack in df_mean_condition.index:
         for feature in relevant_features:
-            if feature in ['Destination Port', 'PSH Flag Count', 'SYN Flag Count', 'RST Flag Count', 'ACK Flag Count']:
+            if feature in ['PSH Flag Count', 'SYN Flag Count', 'RST Flag Count', 'ACK Flag Count']:
                 val = int(df_mean_condition[feature][attack])
                 representations[attack].append([val])
                 levels[attack].append(val)
+            elif feature == 'Destination Port':
+                port_num = int(df_mean_condition[feature][attack])
+                port_bin = convert_port_to_binary(port_num)
+                representations[attack].append(port_bin)
+                levels[attack].append(port_num)
             else:
                 if vector_type == "percentile":
                     level, representation = get_percentile_vector(df, df_mean_condition, attack, feature)
@@ -145,7 +167,8 @@ def compute_dynamic_condition_vectors(df, relevant_features, quantiles=(0.33, 0.
     Returns: np.array. The condition vectors.
     """
     flag_cols = [col for col in relevant_features if "Flag" in col]
-    cols_to_dummy = [col for col in relevant_features if col not in flag_cols and col != "Destination Port"]
+    port_col = "Destination Port"
+    cols_to_dummy = [col for col in relevant_features if col not in flag_cols and col != port_col]
     df_condition = df[relevant_features]
 
     # compute bucket for each feature based on quantile values
@@ -159,15 +182,43 @@ def compute_dynamic_condition_vectors(df, relevant_features, quantiles=(0.33, 0.
 
     # reorder cols (.get_dummies() appends to the end)
     reorder_cols = [col for col in df_condition.columns if col not in flag_cols] + flag_cols
-    condition_vectors = df_condition[reorder_cols].values
+    df_condition = df_condition[reorder_cols]
 
-    return condition_vectors
+    # handle "Destination Port"
+    # covert port to 16 bit array and add to df
+    df_condition[port_col] = df_condition[port_col].apply(convert_port_to_binary)
+    # make new port df to separate arrays into columns
+    df_port = pd.DataFrame(df_condition[port_col].tolist(),
+                           columns=[port_col + f"_{i}" for i in range(16)],
+                           index=df_condition.index)
+    # concatenate dfs
+    df_condition = pd.concat([df_port, df_condition.drop(port_col, axis=1)], axis=1)
+
+    return df_condition.values
 
 
-def compute_dynamic_condition_vector_dict(condition_vectors, labels, max_per_class=5000, num_labels=14):
+def compute_dynamic_condition_vector_dict(condition_vectors, labels, max_per_class=10000, num_labels=14):
+    """
+    Constructs a dictionary that contains class-condition_vector key-value pairs.
+    For each class we select max_per_class condition vectors.
+    If there are more than max_per_class condition vectors,
+    max_per_class vectors are drawn at random from the population. If there are less of them are selected.
+    Args:
+        condition_vectors: np.array.
+        labels: np.array.
+        max_per_class: Int.
+        num_labels: Int.
+
+    Returns: Dict
+
+    """
     condition_vector_dict = {}
     for label in range(num_labels):
-        idx = np.where(labels == label)[0][:max_per_class]
+        idx = np.where(labels == label)[0]
+        if len(idx) > max_per_class:
+            idx = np.random.choice(idx, max_per_class)
+        else:
+            idx = idx[:max_per_class]
         condition_vector_dict[label] = condition_vectors[idx]
     return condition_vector_dict
 
@@ -277,7 +328,6 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
         # y_train should be in the same order as train_dynamic_condition_vectors still
         dynamic_condition_vector_dict = compute_dynamic_condition_vector_dict(train_dynamic_condition_vectors,
                                                                               df_train_reconstruct.Label)
-
         torch.save(train_dynamic_condition_vectors,  write_path / f"train_dynamic_condition_vectors.pt")
         torch.save(test_dynamic_condition_vectors,  write_path / f"test_dynamic_condition_vectors.pt")
         torch.save(dynamic_condition_vector_dict,  write_path / f"dynamic_condition_vector_dict.pt")
@@ -320,12 +370,9 @@ class CIC17Dataset(data.Dataset):
         # torch.Dataset cannot handle 'None' values, hence just empty list
         condition_vector = []
         if self.use_static_condition_vectors:
-            # TODO: handle port correctly
-            # condition_vector = torch.Tensor(self.static_condition_vectors[label])
-            condition_vector = torch.Tensor(self.static_condition_vectors[label][1:])
+            condition_vector = torch.Tensor(self.static_condition_vectors[label])
         elif self.use_dynamic_condition_vectors:
-            # condition_vector = self.dynamic_condition_vectors[idx]
-            condition_vector = self.dynamic_condition_vectors[idx][1:]
+            condition_vector = self.dynamic_condition_vectors[idx]
         return [self.X[idx], label, condition_vector]
 
 
@@ -392,14 +439,12 @@ if __name__ == '__main__':
 
     print(train_dataset.class_names, train_dataset.condition_vector_names)
     print(train_dataset.static_condition_vectors, train_dataset.static_condition_levels)
-    levels, levels_without_port = collections.defaultdict(list), collections.defaultdict(list)
+    levels = collections.defaultdict(list)
     for label, level in train_dataset.static_condition_levels.items():
         levels[tuple(level)].append(label)
-        levels_without_port[tuple(level[1:])].append(label)
     print("Duplicates:", not len(levels) == len(train_dataset.static_condition_levels))
     # 'DoS GoldenEye' 'DoS Hulk' have duplicate representations, unfortunately.
     print(levels)
-    print(levels_without_port)
 
     # 6. validate dynamic condition vectors
     train_dataset = CIC17Dataset("./data/cic-ids-2017_splits/seed_0/train_dataset_scaled.pt", is_scaled=True,

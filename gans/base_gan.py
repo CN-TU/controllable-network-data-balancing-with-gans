@@ -216,10 +216,7 @@ class BaseGAN:
         self.set_mode("eval")
         with torch.no_grad():
             noise, labels, condition_vectors = self.make_noise_and_labels(num_samples, label_weights)
-            if self.use_static_condition_vectors:
-                generated_features = self.G(noise, condition_vectors)
-            elif self.use_dynamic_condition_vectors:
-                # TODO: maybe adjust for labels
+            if self.use_static_condition_vectors or self.use_dynamic_condition_vectors:
                 generated_features = self.G(noise, condition_vectors)
             else:
                 generated_features = self.G(noise, labels)
@@ -252,16 +249,14 @@ class BaseGAN:
     def make_static_condition_vectors(self, labels):
         condition_vectors = []
         for label in labels:
-            # TODO: fix port usage
-            # condition_vectors.append(condition_vector_dict[label])
-            condition_vectors.append(self.condition_vector_dict[label][1:])
+            condition_vectors.append(self.condition_vector_dict[label])
         return torch.Tensor(condition_vectors).to(self.device)
 
     def make_dynamic_condition_vectors(self, labels):
         condition_vectors = []
-        condition_vector_features = utils.get_condition_vector_names()
 
-        # #  old approach: randomly construct the condition vector
+        # #  Old approach: randomly construct the condition vectors (does not work well)
+        # condition_vector_features = utils.get_condition_vector_names()
         # for label in labels:
         #     vector = []
         #     for feature in condition_vector_features:
@@ -276,11 +271,11 @@ class BaseGAN:
         #             vector += np.eye(3)[np.random.choice(3)].tolist()
         #     condition_vectors.append(vector)
 
-        # new approach: use real condition vectors instead of randomly constructed ones
+        # New approach: use real condition vectors instead of randomly constructed ones
+        # TODO: think about adding the label one-hot vector
         for label in labels:
             vectors = self.condition_vector_dict[label]
-            # selected = vectors[np.random.choice(vectors.shape[0])]
-            selected = vectors[np.random.choice(vectors.shape[0])][1:]
+            selected = vectors[np.random.choice(vectors.shape[0])]
             condition_vectors.append(selected)
         return torch.Tensor(condition_vectors).to(self.device)
 
