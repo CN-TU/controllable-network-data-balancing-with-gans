@@ -199,7 +199,8 @@ class BaseGAN:
             distance_by_class = {"Distance_measures/" + k: v for k, v in distance_by_class.items()}
             self.logger.log_to_tensorboard(distance_by_class, step, 0, 1)
 
-    def generate(self, num_samples=1024, label_weights=None, scaler=None, label_encoder=None):
+    def generate(self, num_samples=1024, label_weights=None, scaler=None, label_encoder=None,
+                 condition_vectors=None, labels=None):
         """
         Generates the given number of fake flows.
 
@@ -208,6 +209,8 @@ class BaseGAN:
             label_weights: None or List. Weights used for random generation of fake labels.
             scaler: sklearn model.
             label_encoder: sklearn model.
+            condition_vectors: None or List. Contains predefined condition vectors.
+            labels: None or List. Contains predefined labels.
 
         Returns: torch.Tensor of generated samples, torch.Tensor of generated labels,
                  (optionally) torch.Tensor of condition vectors
@@ -215,7 +218,12 @@ class BaseGAN:
         """
         self.set_mode("eval")
         with torch.no_grad():
-            noise, labels, condition_vectors = self.make_noise_and_labels(num_samples, label_weights)
+            if condition_vectors and labels:
+                if not isinstance(condition_vectors, torch.Tensor):
+                    condition_vectors = torch.Tensor(condition_vectors).to(self.device)
+                noise = self.make_noise(len(condition_vectors))
+            else:
+                noise, labels, condition_vectors = self.make_noise_and_labels(num_samples, label_weights)
             if self.use_static_condition_vectors or self.use_dynamic_condition_vectors:
                 generated_features = self.G(noise, condition_vectors)
             else:
