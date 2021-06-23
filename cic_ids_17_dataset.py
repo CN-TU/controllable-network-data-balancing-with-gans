@@ -316,11 +316,10 @@ def generate_train_test_split(data_folder_path, write_path="./data/cic-ids-2017_
         dynamic_condition_level_dict = compute_dynamic_condition_vector_dict(train_dynamic_condition_levels,
                                                                              df_train_reconstruct.Label)
 
-        torch.save(train_dynamic_condition_vectors,  write_path / f"train_dynamic_condition_vectors.pt")
-        torch.save(test_dynamic_condition_vectors,  write_path / f"test_dynamic_condition_vectors.pt")
-        torch.save(dynamic_condition_vector_dict,  write_path / f"dynamic_condition_vector_dict.pt")
-        torch.save(dynamic_condition_level_dict,  write_path / f"dynamic_condition_level_dict.pt")
-
+        torch.save(train_dynamic_condition_vectors, write_path / f"train_dynamic_condition_vectors.pt")
+        torch.save(test_dynamic_condition_vectors, write_path / f"test_dynamic_condition_vectors.pt")
+        torch.save(dynamic_condition_vector_dict, write_path / f"dynamic_condition_vector_dict.pt")
+        torch.save(dynamic_condition_level_dict, write_path / f"dynamic_condition_level_dict.pt")
 
 
 class CIC17Dataset(data.Dataset):
@@ -452,4 +451,3 @@ if __name__ == '__main__':
     # print(train_dataset.dynamic_condition_leve_dict)
     # for label, vectors in train_dataset.dynamic_condition_level_dict.items():
     #     print(label, vectors.shape)
-

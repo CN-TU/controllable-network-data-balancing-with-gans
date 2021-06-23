@@ -3,7 +3,8 @@ import random
 import torch
 import numpy as np
 import pandas as pd
-
+from tensorboard.backend.event_processing import event_accumulator
+from tqdm import tqdm
 
 def get_label_names():
     return ['Bot', 'DDoS', 'DoS GoldenEye', 'DoS Hulk', 'DoS Slowhttptest', 'DoS slowloris',
@@ -113,11 +114,11 @@ def set_seeds(seed=None):
         np.random.seed(seed)
 
 
-def load_static_condition_levels(path="data/cic-ids-2017_splits/seed_0/static_condition_levels.pt"):
+def load_static_condition_levels(path="./data/cic-ids-2017_splits/seed_0/static_condition_levels.pt"):
     return torch.load(path)
 
 
-def load_dynamic_condition_levels(path="data/cic-ids-2017_splits/seed_0/dynamic_condition_level_dict.pt"):
+def load_dynamic_condition_levels(path="./data/cic-ids-2017_splits/seed_0/dynamic_condition_level_dict.pt"):
     return torch.load(path)
 
 
@@ -218,8 +219,24 @@ def convert_levels_to_condition_vectors(level_dicts, attack_types=None):
     return condition_vectors
 
 
-def generate_from_levels(gan, levels, attack_types, scaler=None, label_encoder=None):
-    column_names = torch.load("./data/cic-ids-2017_splits/seed_0/column_names.pt")
+def generate_from_levels(gan, levels, attack_types, scaler=None, label_encoder=None,
+                         column_names=None):
+    """
+    Only used within evaluation.ipynb
+
+    Args:
+        gan: The trained GAN.
+        levels: List.
+        attack_types: List.
+        scaler: Sklearn scaler.
+        label_encoder: Sklearn label encoder.
+        column_names: None or np.array.
+
+    Returns: pd.DataFrame
+
+    """
+    if not column_names:
+        column_names = torch.load("./data/cic-ids-2017_splits/seed_0/column_names.pt")
     condition_vectors = convert_levels_to_condition_vectors(levels, attack_types)
     labels = labels_to_labelidx(attack_types)
 
@@ -237,6 +254,34 @@ def generate_from_levels(gan, levels, attack_types, scaler=None, label_encoder=N
     df_flows = pd.DataFrame(flows, columns=column_names[:-1])
     df_results = pd.concat([df_results, df_flows], axis=1)
     return df_results
+
+
+def load_tf_event_files(paths, architectures=None):
+    if isinstance(paths, str):
+        paths = [paths]
+    # if architectures is not None and not isinstance(architectures, (list, tuple, np.ndarray)):
+    if architectures is not None and isinstance(architectures, str):
+        architectures = [architectures]
+    assert len(paths) == len(architectures)
+
+    metrics = []
+    for path, architecture in tqdm(zip(paths, architectures), total=len(paths)):
+        ea = event_accumulator.EventAccumulator(path)
+        ea.Reload()
+        scalar_tags = ea.Tags()['scalars']
+
+        for tag in scalar_tags:
+            events_list = ea.Scalars(tag)
+            for event in events_list:
+                metrics.append({
+                    "File_path": path,
+                    "Architecture": architecture,
+                    "Metric": tag,
+                    "wall_time": event[0],
+                    "step": event[1],
+                    "value": event[2]
+                })
+    return pd.DataFrame(metrics)
 
 
 if __name__ == "__main__":
