@@ -4,8 +4,7 @@ from .base_gan import BaseGAN
 
 
 class CWGAN(BaseGAN):
-
-    def __init__(self, G, D, G_optimizer, D_optimizer, clip_val=0.1, lambda_gp=10, lambda_auxiliary=1,
+    def __init__(self, G, D, G_optimizer, D_optimizer, clip_val=0.1, lambda_gp=1, lambda_auxiliary=1,
                  use_gradient_penalty=False, use_auxiliary_classifier=False,
                  use_wandb=False, use_static_condition_vectors=False, use_dynamic_condition_vectors=False,
                  model_save_dir=None, log_dir=None, device=None, condition_vector_dict=None):
