@@ -62,7 +62,7 @@ def make_generator_and_discriminator(device, args):
 
 
 def make_optimizer(G, D, args):
-    if args.use_gp:
+    if args.use_gp or args.use_acgan:
         G_optimizer = torch.optim.Adam(G.parameters(), lr=args.lr, betas=(0.5, 0.999))
         D_optimizer = torch.optim.Adam(D.parameters(), lr=args.lr, betas=(0.5, 0.999))
     elif args.use_wgan:
