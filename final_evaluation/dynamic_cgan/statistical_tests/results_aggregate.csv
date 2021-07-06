@@ -1,0 +1,16 @@
+Architecture,Metric,mean,std
+CGAN with dynamic condition vectors,N_real_features/Bot,47.0,2.828
+CGAN with dynamic condition vectors,N_real_features/DDoS,34.5,4.95
+CGAN with dynamic condition vectors,N_real_features/DoS_GoldenEye,53.5,0.707
+CGAN with dynamic condition vectors,N_real_features/DoS_Hulk,30.0,1.414
+CGAN with dynamic condition vectors,N_real_features/DoS_Slowhttptest,50.5,7.778
+CGAN with dynamic condition vectors,N_real_features/DoS_slowloris,36.5,13.435
+CGAN with dynamic condition vectors,N_real_features/FTP-Patator,40.5,3.536
+CGAN with dynamic condition vectors,N_real_features/Heartbleed,0.0,0.0
+CGAN with dynamic condition vectors,N_real_features/Infiltration,55.0,2.828
+CGAN with dynamic condition vectors,N_real_features/PortScan,39.5,2.121
+CGAN with dynamic condition vectors,N_real_features/SSH-Patator,41.0,5.657
+CGAN with dynamic condition vectors,N_real_features/Web_Attack___Brute_Force,42.0,7.071
+CGAN with dynamic condition vectors,N_real_features/Web_Attack___Sql_Injection,79.0,0.0
+CGAN with dynamic condition vectors,N_real_features/Web_Attack___XSS,39.0,31.113
+CGAN with dynamic condition vectors,N_real_features/mean_n_real_features,42.0,3.131

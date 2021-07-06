@@ -1,0 +1,57 @@
+Feature,Attack_Type,F1,Accuracy
+PSH Flag Count,Bot,0.9868287740628165,0.987
+PSH Flag Count,DDoS,0.9979959919839679,0.998
+PSH Flag Count,DoS GoldenEye,1.0,1.0
+PSH Flag Count,DoS Hulk,0.9883662114314619,0.9885
+PSH Flag Count,DoS Slowhttptest,0.955114822546973,0.957
+PSH Flag Count,DoS slowloris,0.8099762470308789,0.84
+PSH Flag Count,FTP-Patator,0.8016032064128257,0.7525
+PSH Flag Count,Heartbleed,0.0,0.5
+PSH Flag Count,Infiltration,0.8116458704694,0.8415
+PSH Flag Count,PortScan,0.8845643520566121,0.8695
+PSH Flag Count,SSH-Patator,0.7137758743754461,0.599
+PSH Flag Count,Web Attack  Brute Force,1.0,1.0
+PSH Flag Count,Web Attack  Sql Injection,1.0,1.0
+PSH Flag Count,Web Attack  XSS,1.0,1.0
+SYN Flag Count,Bot,0.28178694158075607,0.582
+SYN Flag Count,DDoS,0.6310746064339493,0.7305
+SYN Flag Count,DoS GoldenEye,0.43750000000000006,0.64
+SYN Flag Count,DoS Hulk,0.8760330578512397,0.8875
+SYN Flag Count,DoS Slowhttptest,0.610145934676859,0.7195
+SYN Flag Count,DoS slowloris,0.7954271961492179,0.83
+SYN Flag Count,FTP-Patator,0.7129987129987131,0.777
+SYN Flag Count,Heartbleed,1.0,1.0
+SYN Flag Count,Infiltration,0.9852216748768473,0.985
+SYN Flag Count,PortScan,0.003992015968063872,0.501
+SYN Flag Count,SSH-Patator,0.9959839357429718,0.996
+SYN Flag Count,Web Attack  Brute Force,0.23943661971830985,0.568
+SYN Flag Count,Web Attack  Sql Injection,0.5984583041345479,0.7135
+SYN Flag Count,Web Attack  XSS,0.054474708171206226,0.514
+RST Flag Count,Bot,0.0,0.5
+RST Flag Count,DDoS,0.0,0.5
+RST Flag Count,DoS GoldenEye,0.0,0.5
+RST Flag Count,DoS Hulk,0.0,0.5
+RST Flag Count,DoS Slowhttptest,0.0,0.5
+RST Flag Count,DoS slowloris,0.0,0.5
+RST Flag Count,FTP-Patator,0.0,0.5
+RST Flag Count,Heartbleed,0.0,0.5
+RST Flag Count,Infiltration,0.0,0.5
+RST Flag Count,PortScan,0.0,0.5
+RST Flag Count,SSH-Patator,0.0,0.5
+RST Flag Count,Web Attack  Brute Force,0.0,0.5
+RST Flag Count,Web Attack  Sql Injection,0.0,0.5
+RST Flag Count,Web Attack  XSS,0.0,0.5
+ACK Flag Count,Bot,0.7593220338983051,0.787
+ACK Flag Count,DDoS,0.8464800678541137,0.819
+ACK Flag Count,DoS GoldenEye,0.9247633283507724,0.9245
+ACK Flag Count,DoS Hulk,0.9324009324009325,0.9275
+ACK Flag Count,DoS Slowhttptest,0.8359528487229861,0.833
+ACK Flag Count,DoS slowloris,0.917300380228137,0.913
+ACK Flag Count,FTP-Patator,0.5457198443579767,0.533
+ACK Flag Count,Heartbleed,0.6666666666666666,0.5
+ACK Flag Count,Infiltration,0.7419992097984986,0.6735
+ACK Flag Count,PortScan,0.10246679316888045,0.527
+ACK Flag Count,SSH-Patator,0.5725149375339489,0.6065
+ACK Flag Count,Web Attack  Brute Force,0.9813542688910697,0.981
+ACK Flag Count,Web Attack  Sql Injection,0.859106529209622,0.836
+ACK Flag Count,Web Attack  XSS,0.9876543209876543,0.9875

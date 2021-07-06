@@ -48,7 +48,7 @@ def make_generator_and_discriminator(device, args):
         G = GeneratorWithCondition(args.num_features, args.num_labels, args.condition_size,
                                    latent_dim=args.latent_dim,
                                    condition_latent_dim=args.condition_latent_dim).to(device)
-        D = DiscriminatorWithCondition(argsq.num_features, args.condition_size,
+        D = DiscriminatorWithCondition(args.num_features, args.condition_size,
                                        num_labels=args.num_labels,
                                        use_label_condition=not (args.use_acgan or args.use_auxiliary_classifier),
                                        use_class_head=(args.use_acgan or args.use_auxiliary_classifier),

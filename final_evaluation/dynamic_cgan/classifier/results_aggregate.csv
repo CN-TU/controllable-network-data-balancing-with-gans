@@ -1,0 +1,8 @@
+Architecture,Metric,mean,std
+CGAN with dynamic condition vectors,Classifier/accuracy,0.836,0.017
+CGAN with dynamic condition vectors,Classifier/macro_f1,0.507,0.046
+CGAN with dynamic condition vectors,Classifier/macro_precision,0.556,0.06
+CGAN with dynamic condition vectors,Classifier/macro_recall,0.52,0.062
+CGAN with dynamic condition vectors,Classifier/weighted_f1,0.82,0.016
+CGAN with dynamic condition vectors,Classifier/weighted_precision,0.815,0.019
+CGAN with dynamic condition vectors,Classifier/weighted_recall,0.836,0.017

@@ -1,0 +1,15 @@
+Architecture,Metric,mean,std
+CGAN with dynamic condition vectors,Distance_measures/Bot,0.115,0.037
+CGAN with dynamic condition vectors,Distance_measures/DDoS,1.166,0.065
+CGAN with dynamic condition vectors,Distance_measures/DoS_GoldenEye,0.285,0.027
+CGAN with dynamic condition vectors,Distance_measures/DoS_Hulk,1.941,0.055
+CGAN with dynamic condition vectors,Distance_measures/DoS_Slowhttptest,0.431,0.116
+CGAN with dynamic condition vectors,Distance_measures/DoS_slowloris,0.436,0.05
+CGAN with dynamic condition vectors,Distance_measures/FTP-Patator,0.156,0.002
+CGAN with dynamic condition vectors,Distance_measures/Heartbleed,0.703,0.296
+CGAN with dynamic condition vectors,Distance_measures/Infiltration,0.44,0.128
+CGAN with dynamic condition vectors,Distance_measures/PortScan,0.193,0.007
+CGAN with dynamic condition vectors,Distance_measures/SSH-Patator,0.106,0.021
+CGAN with dynamic condition vectors,Distance_measures/Web_Attack___Brute_Force,0.077,0.06
+CGAN with dynamic condition vectors,Distance_measures/Web_Attack___Sql_Injection,0.105,0.011
+CGAN with dynamic condition vectors,Distance_measures/Web_Attack___XSS,0.062,0.062

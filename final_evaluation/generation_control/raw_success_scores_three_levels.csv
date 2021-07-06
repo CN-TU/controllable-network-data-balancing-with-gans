@@ -1,0 +1,295 @@
+Feature,Attack_Type,Level,Score,Mean Feature val
+Flow Duration,Bot,0,0,425136.21
+Flow Duration,Bot,1,0,251429.37
+Flow Duration,Bot,2,1,7342799.44
+Flow Duration,DDoS,0,1,3783744.99
+Flow Duration,DDoS,1,1,11120123.23
+Flow Duration,DDoS,2,1,23815314.08
+Flow Duration,DoS GoldenEye,0,1,4988561.7
+Flow Duration,DoS GoldenEye,1,1,6684919.03
+Flow Duration,DoS GoldenEye,2,1,21236770.12
+Flow Duration,DoS Hulk,0,1,22359087.68
+Flow Duration,DoS Hulk,1,1,36911607.77
+Flow Duration,DoS Hulk,2,1,57490947.44
+Flow Duration,DoS Slowhttptest,0,1,29728000.17
+Flow Duration,DoS Slowhttptest,1,1,39441329.14
+Flow Duration,DoS Slowhttptest,2,1,61590231.86
+Flow Duration,DoS slowloris,0,1,31439272.6
+Flow Duration,DoS slowloris,1,1,35030093.54
+Flow Duration,DoS slowloris,2,1,66796513.46
+Flow Duration,FTP-Patator,0,1,2733807.69
+Flow Duration,FTP-Patator,1,0,4653238.23
+Flow Duration,FTP-Patator,2,0,3993871.13
+Flow Duration,Heartbleed,0,1,14915263.57
+Flow Duration,Heartbleed,1,0,37001784.17
+Flow Duration,Heartbleed,2,0,34069330.84
+Flow Duration,Infiltration,0,1,69511333.47
+Flow Duration,Infiltration,1,1,78327026.18
+Flow Duration,Infiltration,2,1,85922941.29
+Flow Duration,PortScan,0,1,18089.25
+Flow Duration,PortScan,1,1,84659.5
+Flow Duration,PortScan,2,1,260876.83
+Flow Duration,SSH-Patator,0,1,4538430.34
+Flow Duration,SSH-Patator,1,1,5627623.81
+Flow Duration,SSH-Patator,2,1,6121746.02
+Flow Duration,Web Attack  Brute Force,0,1,2590357.38
+Flow Duration,Web Attack  Brute Force,1,1,5100491.08
+Flow Duration,Web Attack  Brute Force,2,1,30057897.36
+Flow Duration,Web Attack  Sql Injection,0,1,242610.5
+Flow Duration,Web Attack  Sql Injection,1,1,251848.28
+Flow Duration,Web Attack  Sql Injection,2,1,6635893.65
+Flow Duration,Web Attack  XSS,0,1,2658215.09
+Flow Duration,Web Attack  XSS,1,1,5246246.34
+Flow Duration,Web Attack  XSS,2,1,30492731.96
+Total Backward Packets,Bot,0,1,2.77
+Total Backward Packets,Bot,1,1,4.36
+Total Backward Packets,Bot,2,1,13.62
+Total Backward Packets,DDoS,0,1,0.76
+Total Backward Packets,DDoS,1,1,3.97
+Total Backward Packets,DDoS,2,1,7.62
+Total Backward Packets,DoS GoldenEye,0,0,1.91
+Total Backward Packets,DoS GoldenEye,1,0,1.08
+Total Backward Packets,DoS GoldenEye,2,1,2.59
+Total Backward Packets,DoS Hulk,0,1,2.1
+Total Backward Packets,DoS Hulk,1,1,3.77
+Total Backward Packets,DoS Hulk,2,1,6.27
+Total Backward Packets,DoS Slowhttptest,0,1,0.06
+Total Backward Packets,DoS Slowhttptest,1,1,0.17
+Total Backward Packets,DoS Slowhttptest,2,1,0.46
+Total Backward Packets,DoS slowloris,0,1,0.11
+Total Backward Packets,DoS slowloris,1,1,1.86
+Total Backward Packets,DoS slowloris,2,1,1.9
+Total Backward Packets,FTP-Patator,0,1,0.96
+Total Backward Packets,FTP-Patator,1,1,3.26
+Total Backward Packets,FTP-Patator,2,1,8.0
+Total Backward Packets,Heartbleed,0,1,150.87
+Total Backward Packets,Heartbleed,1,1,957.52
+Total Backward Packets,Heartbleed,2,1,1251.79
+Total Backward Packets,Infiltration,0,1,20.84
+Total Backward Packets,Infiltration,1,1,116.49
+Total Backward Packets,Infiltration,2,1,173.88
+Total Backward Packets,PortScan,0,1,0.63
+Total Backward Packets,PortScan,1,1,4.93
+Total Backward Packets,PortScan,2,1,8.42
+Total Backward Packets,SSH-Patator,0,1,2.52
+Total Backward Packets,SSH-Patator,1,1,10.19
+Total Backward Packets,SSH-Patator,2,1,16.05
+Total Backward Packets,Web Attack  Brute Force,0,1,0.12
+Total Backward Packets,Web Attack  Brute Force,1,0,4.62
+Total Backward Packets,Web Attack  Brute Force,2,0,2.89
+Total Backward Packets,Web Attack  Sql Injection,0,1,0.29
+Total Backward Packets,Web Attack  Sql Injection,1,1,1.05
+Total Backward Packets,Web Attack  Sql Injection,2,1,4.21
+Total Backward Packets,Web Attack  XSS,0,1,0.12
+Total Backward Packets,Web Attack  XSS,1,0,5.26
+Total Backward Packets,Web Attack  XSS,2,0,3.01
+Total Fwd Packets,Bot,0,1,1.1
+Total Fwd Packets,Bot,1,1,2.24
+Total Fwd Packets,Bot,2,1,2.48
+Total Fwd Packets,DDoS,0,1,2.63
+Total Fwd Packets,DDoS,1,1,4.13
+Total Fwd Packets,DDoS,2,1,9.01
+Total Fwd Packets,DoS GoldenEye,0,1,3.84
+Total Fwd Packets,DoS GoldenEye,1,1,6.62
+Total Fwd Packets,DoS GoldenEye,2,1,10.03
+Total Fwd Packets,DoS Hulk,0,1,4.54
+Total Fwd Packets,DoS Hulk,1,1,6.32
+Total Fwd Packets,DoS Hulk,2,1,8.26
+Total Fwd Packets,DoS Slowhttptest,0,1,1.48
+Total Fwd Packets,DoS Slowhttptest,1,1,2.94
+Total Fwd Packets,DoS Slowhttptest,2,1,5.98
+Total Fwd Packets,DoS slowloris,0,1,1.33
+Total Fwd Packets,DoS slowloris,1,1,2.19
+Total Fwd Packets,DoS slowloris,2,1,7.15
+Total Fwd Packets,FTP-Patator,0,0,1.66
+Total Fwd Packets,FTP-Patator,1,0,1.63
+Total Fwd Packets,FTP-Patator,2,1,3.86
+Total Fwd Packets,Heartbleed,0,1,98.19
+Total Fwd Packets,Heartbleed,1,1,1013.09
+Total Fwd Packets,Heartbleed,2,1,1081.92
+Total Fwd Packets,Infiltration,0,1,3.34
+Total Fwd Packets,Infiltration,1,1,70.47
+Total Fwd Packets,Infiltration,2,1,169.47
+Total Fwd Packets,PortScan,0,1,1.07
+Total Fwd Packets,PortScan,1,1,1.98
+Total Fwd Packets,PortScan,2,1,2.4
+Total Fwd Packets,SSH-Patator,0,1,4.0
+Total Fwd Packets,SSH-Patator,1,1,5.54
+Total Fwd Packets,SSH-Patator,2,1,13.33
+Total Fwd Packets,Web Attack  Brute Force,0,1,2.25
+Total Fwd Packets,Web Attack  Brute Force,1,1,2.68
+Total Fwd Packets,Web Attack  Brute Force,2,1,8.44
+Total Fwd Packets,Web Attack  Sql Injection,0,1,1.52
+Total Fwd Packets,Web Attack  Sql Injection,1,1,3.15
+Total Fwd Packets,Web Attack  Sql Injection,2,1,4.17
+Total Fwd Packets,Web Attack  XSS,0,1,2.1
+Total Fwd Packets,Web Attack  XSS,1,1,2.32
+Total Fwd Packets,Web Attack  XSS,2,1,8.76
+Packet Length Mean,Bot,0,1,19.86
+Packet Length Mean,Bot,1,1,39.5
+Packet Length Mean,Bot,2,1,486.5
+Packet Length Mean,DDoS,0,1,157.01
+Packet Length Mean,DDoS,1,1,229.71
+Packet Length Mean,DDoS,2,1,746.42
+Packet Length Mean,DoS GoldenEye,0,1,193.1
+Packet Length Mean,DoS GoldenEye,1,1,352.02
+Packet Length Mean,DoS GoldenEye,2,1,634.88
+Packet Length Mean,DoS Hulk,0,1,226.87
+Packet Length Mean,DoS Hulk,1,1,489.43
+Packet Length Mean,DoS Hulk,2,1,652.29
+Packet Length Mean,DoS Slowhttptest,0,1,24.98
+Packet Length Mean,DoS Slowhttptest,1,1,70.93
+Packet Length Mean,DoS Slowhttptest,2,1,321.15
+Packet Length Mean,DoS slowloris,0,1,24.04
+Packet Length Mean,DoS slowloris,1,1,124.33
+Packet Length Mean,DoS slowloris,2,1,468.18
+Packet Length Mean,FTP-Patator,0,0,18.16
+Packet Length Mean,FTP-Patator,1,0,6.57
+Packet Length Mean,FTP-Patator,2,1,317.06
+Packet Length Mean,Heartbleed,0,1,464.97
+Packet Length Mean,Heartbleed,1,1,983.69
+Packet Length Mean,Heartbleed,2,1,1232.11
+Packet Length Mean,Infiltration,0,1,175.78
+Packet Length Mean,Infiltration,1,1,461.36
+Packet Length Mean,Infiltration,2,1,520.24
+Packet Length Mean,PortScan,0,1,3.43
+Packet Length Mean,PortScan,1,1,11.93
+Packet Length Mean,PortScan,2,1,155.68
+Packet Length Mean,SSH-Patator,0,1,28.33
+Packet Length Mean,SSH-Patator,1,1,48.11
+Packet Length Mean,SSH-Patator,2,1,127.18
+Packet Length Mean,Web Attack  Brute Force,0,1,21.23
+Packet Length Mean,Web Attack  Brute Force,1,1,44.67
+Packet Length Mean,Web Attack  Brute Force,2,1,76.73
+Packet Length Mean,Web Attack  Sql Injection,0,0,108.33
+Packet Length Mean,Web Attack  Sql Injection,1,0,70.38
+Packet Length Mean,Web Attack  Sql Injection,2,1,706.73
+Packet Length Mean,Web Attack  XSS,0,1,14.25
+Packet Length Mean,Web Attack  XSS,1,1,27.44
+Packet Length Mean,Web Attack  XSS,2,1,52.52
+Flow Bytes/s,Bot,0,0,31176.5
+Flow Bytes/s,Bot,1,0,53489.66
+Flow Bytes/s,Bot,2,0,26096.84
+Flow Bytes/s,DDoS,0,1,9660.04
+Flow Bytes/s,DDoS,1,1,16461.75
+Flow Bytes/s,DDoS,2,1,24234.18
+Flow Bytes/s,DoS GoldenEye,0,1,3.97
+Flow Bytes/s,DoS GoldenEye,1,0,255.13
+Flow Bytes/s,DoS GoldenEye,2,0,138.37
+Flow Bytes/s,DoS Hulk,0,1,2005.2
+Flow Bytes/s,DoS Hulk,1,1,46468.51
+Flow Bytes/s,DoS Hulk,2,1,72929.43
+Flow Bytes/s,DoS Slowhttptest,0,1,12905023.91
+Flow Bytes/s,DoS Slowhttptest,1,1,13707586.53
+Flow Bytes/s,DoS Slowhttptest,2,1,30190443.16
+Flow Bytes/s,DoS slowloris,0,1,2922.28
+Flow Bytes/s,DoS slowloris,1,0,57720.93
+Flow Bytes/s,DoS slowloris,2,0,33186.7
+Flow Bytes/s,FTP-Patator,0,1,442081.72
+Flow Bytes/s,FTP-Patator,1,0,8492796.28
+Flow Bytes/s,FTP-Patator,2,0,3608383.18
+Flow Bytes/s,Heartbleed,0,0,0.24
+Flow Bytes/s,Heartbleed,1,0,0.18
+Flow Bytes/s,Heartbleed,2,1,1.01
+Flow Bytes/s,Infiltration,0,1,2350.51
+Flow Bytes/s,Infiltration,1,1,6981.12
+Flow Bytes/s,Infiltration,2,1,7004.2
+Flow Bytes/s,PortScan,0,0,387215.6
+Flow Bytes/s,PortScan,1,0,348211.79
+Flow Bytes/s,PortScan,2,0,224481.42
+Flow Bytes/s,SSH-Patator,0,1,7450.15
+Flow Bytes/s,SSH-Patator,1,0,814467.56
+Flow Bytes/s,SSH-Patator,2,0,358051.69
+Flow Bytes/s,Web Attack  Brute Force,0,1,69.79
+Flow Bytes/s,Web Attack  Brute Force,1,1,3919.09
+Flow Bytes/s,Web Attack  Brute Force,2,1,4887.14
+Flow Bytes/s,Web Attack  Sql Injection,0,1,251.4
+Flow Bytes/s,Web Attack  Sql Injection,1,0,9295.38
+Flow Bytes/s,Web Attack  Sql Injection,2,0,8475.15
+Flow Bytes/s,Web Attack  XSS,0,1,42.87
+Flow Bytes/s,Web Attack  XSS,1,1,691.72
+Flow Bytes/s,Web Attack  XSS,2,1,1538.15
+Flow IAT Min,Bot,0,0,51.61
+Flow IAT Min,Bot,1,0,41.43
+Flow IAT Min,Bot,2,0,47.72
+Flow IAT Min,DDoS,0,1,437.2
+Flow IAT Min,DDoS,1,1,504.7
+Flow IAT Min,DDoS,2,1,538.46
+Flow IAT Min,DoS GoldenEye,0,1,6050864.08
+Flow IAT Min,DoS GoldenEye,1,1,8528262.1
+Flow IAT Min,DoS GoldenEye,2,1,8607205.0
+Flow IAT Min,DoS Hulk,0,0,2474.61
+Flow IAT Min,DoS Hulk,1,0,1695.61
+Flow IAT Min,DoS Hulk,2,1,7935.76
+Flow IAT Min,DoS Slowhttptest,0,1,291310.95
+Flow IAT Min,DoS Slowhttptest,1,0,439066.26
+Flow IAT Min,DoS Slowhttptest,2,0,424443.82
+Flow IAT Min,DoS slowloris,0,1,13083.66
+Flow IAT Min,DoS slowloris,1,0,59082.65
+Flow IAT Min,DoS slowloris,2,0,13085.41
+Flow IAT Min,FTP-Patator,0,0,123.39
+Flow IAT Min,FTP-Patator,1,0,106.7
+Flow IAT Min,FTP-Patator,2,0,114.69
+Flow IAT Min,Heartbleed,0,0,395.29
+Flow IAT Min,Heartbleed,1,0,356.02
+Flow IAT Min,Heartbleed,2,0,352.24
+Flow IAT Min,Infiltration,0,0,293.86
+Flow IAT Min,Infiltration,1,0,181.38
+Flow IAT Min,Infiltration,2,0,195.89
+Flow IAT Min,PortScan,0,1,9.33
+Flow IAT Min,PortScan,1,0,153.96
+Flow IAT Min,PortScan,2,0,41.04
+Flow IAT Min,SSH-Patator,0,1,158.98
+Flow IAT Min,SSH-Patator,1,1,167.64
+Flow IAT Min,SSH-Patator,2,1,189.66
+Flow IAT Min,Web Attack  Brute Force,0,1,800.44
+Flow IAT Min,Web Attack  Brute Force,1,1,998.17
+Flow IAT Min,Web Attack  Brute Force,2,1,1283.17
+Flow IAT Min,Web Attack  Sql Injection,0,1,350.62
+Flow IAT Min,Web Attack  Sql Injection,1,1,412.46
+Flow IAT Min,Web Attack  Sql Injection,2,1,571.57
+Flow IAT Min,Web Attack  XSS,0,1,861.36
+Flow IAT Min,Web Attack  XSS,1,1,1055.81
+Flow IAT Min,Web Attack  XSS,2,1,1352.18
+Flow IAT Max,Bot,0,1,69955.39
+Flow IAT Max,Bot,1,1,82472.21
+Flow IAT Max,Bot,2,1,663803.65
+Flow IAT Max,DDoS,0,1,8989482.54
+Flow IAT Max,DDoS,1,1,11627910.34
+Flow IAT Max,DDoS,2,1,22576077.86
+Flow IAT Max,DoS GoldenEye,0,1,5670145.77
+Flow IAT Max,DoS GoldenEye,1,1,6305893.09
+Flow IAT Max,DoS GoldenEye,2,1,19972533.76
+Flow IAT Max,DoS Hulk,0,1,32185964.19
+Flow IAT Max,DoS Hulk,1,1,36504039.57
+Flow IAT Max,DoS Hulk,2,1,63526560.4
+Flow IAT Max,DoS Slowhttptest,0,1,16977149.07
+Flow IAT Max,DoS Slowhttptest,1,1,20653060.47
+Flow IAT Max,DoS Slowhttptest,2,1,41972285.04
+Flow IAT Max,DoS slowloris,0,1,13469368.71
+Flow IAT Max,DoS slowloris,1,1,20542858.54
+Flow IAT Max,DoS slowloris,2,1,47566831.2
+Flow IAT Max,FTP-Patator,0,1,1234323.71
+Flow IAT Max,FTP-Patator,1,1,1515518.75
+Flow IAT Max,FTP-Patator,2,1,2573761.91
+Flow IAT Max,Heartbleed,0,1,2322339.74
+Flow IAT Max,Heartbleed,1,1,3709256.32
+Flow IAT Max,Heartbleed,2,1,4111026.96
+Flow IAT Max,Infiltration,0,1,48164355.01
+Flow IAT Max,Infiltration,1,1,62679187.88
+Flow IAT Max,Infiltration,2,1,66459762.96
+Flow IAT Max,PortScan,0,0,30902.04
+Flow IAT Max,PortScan,1,0,27038.47
+Flow IAT Max,PortScan,2,1,139511.13
+Flow IAT Max,SSH-Patator,0,0,1715806.4
+Flow IAT Max,SSH-Patator,1,0,1332733.57
+Flow IAT Max,SSH-Patator,2,1,3311520.06
+Flow IAT Max,Web Attack  Brute Force,0,1,2805464.59
+Flow IAT Max,Web Attack  Brute Force,1,1,4352221.43
+Flow IAT Max,Web Attack  Brute Force,2,1,12990799.5
+Flow IAT Max,Web Attack  Sql Injection,0,1,114491.67
+Flow IAT Max,Web Attack  Sql Injection,1,1,213622.07
+Flow IAT Max,Web Attack  Sql Injection,2,1,3175314.43
+Flow IAT Max,Web Attack  XSS,0,1,2751525.66
+Flow IAT Max,Web Attack  XSS,1,1,4612994.22
+Flow IAT Max,Web Attack  XSS,2,1,13241112.62
