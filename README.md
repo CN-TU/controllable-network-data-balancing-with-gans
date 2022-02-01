@@ -1,18 +1,11 @@
-# SNORT-based network traffic generation using GANs
-Interdisciplinary Project in Data Science at TU Wien in Summer semester 2021: "SNORT-based network traffic generation using GANs".
-
-## Docs
-TBD
-
-### Model training
-TBD
+# Controllable Network Data Balancing with GANs
+Paper accepted at the NeurIPS'21 workshop: Deep Generative Models and Downstream Applications
 
 ### TensorBoard
 All the training logs are in `./tensorboard`. The TensorBoard logs can be visualized by running:
 ```
 tensorboard --logdir=./tensorboard
 ```
-
 
 ### Repository structure
 
